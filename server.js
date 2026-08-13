@@ -188,7 +188,7 @@ const server = http.createServer(async (req, res) => {
       if (db) {
         const query = profileId ? { profileId: String(profileId) } : {};
         // Item 17: Projection — trim MongoDB metadata (_id, passwordHash, salt)
-        const items = await db.collection('content').find(query, { projection: { _id: 0 } }).toArray();
+        const items = await db.collection('content').find(query, { projection: { _id: 0 } }).sort({ order: 1, addedAt: 1 }).toArray();
         return sendJson(res, 200, { items });
       } else {
         return sendJson(res, 200, { items: [] });

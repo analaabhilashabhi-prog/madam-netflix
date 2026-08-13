@@ -239,6 +239,7 @@ export function makeItem({ title = '', description = '', link, section = '' }) {
   const parsed = parseLink(link);
   const id = `c${Date.now().toString(36)}${(seq++).toString(36)}`;
   const defaultSection = parsed?.orientation === 'vertical' ? 'Short and Sweet Memories of Us' : 'Random Us';
+  const now = Date.now();
   return {
     id,
     title: title.trim(),
@@ -249,7 +250,8 @@ export function makeItem({ title = '', description = '', link, section = '' }) {
     ytId: parsed?.ytId || null,
     src: parsed?.src || null,
     orientation: parsed?.orientation || null, // photos resolve async (4.11)
-    addedAt: Date.now(),
+    addedAt: now,
+    order: now,
     liked: false,
     inList: false,
     badge: null, // assigned at render time from the badge pool
@@ -298,7 +300,7 @@ function findDuplicate(profileId, newItem) {
 export const allProfileIds = () => enabledProfiles().map((p) => p.id);
 
 export function itemsFor(profileId, sectionFilter = null) {
-  const list = (state.profiles[profileId] || []).slice();
+  const list = (state.profiles[profileId] || []).slice().sort((a, b) => (a.order ?? a.addedAt ?? 0) - (b.order ?? b.addedAt ?? 0));
   if (!sectionFilter || sectionFilter === 'All') return list;
   return list.filter((item) => getItemSection(item) === sectionFilter);
 }
@@ -493,13 +495,44 @@ export async function syncWithServer() {
 }
 syncWithServer();
 
-export function moveContent(profileId, itemId, delta) {
-  const list = state.profiles[profileId] || [];
-  const i = list.findIndex((x) => x.id === itemId);
+export async function moveContent(profileId, itemId, delta, sectionFilter = 'All') {
+  const filteredList = itemsFor(profileId, sectionFilter);
+  const i = filteredList.findIndex((x) => x.id === itemId);
   const j = i + delta;
-  if (i < 0 || j < 0 || j >= list.length) return;
-  [list[i], list[j]] = [list[j], list[i]];
+  if (i < 0 || j < 0 || j >= filteredList.length) return false;
+
+  const itemA = filteredList[i];
+  const itemB = filteredList[j];
+
+  const now = Date.now();
+  let orderA = itemA.order ?? itemA.addedAt ?? now;
+  let orderB = itemB.order ?? itemB.addedAt ?? (now + 1000);
+
+  if (orderA === orderB) {
+    orderA = i * 10;
+    orderB = j * 10;
+  }
+
+  itemA.order = orderB;
+  itemB.order = orderA;
+
+  const fullList = state.profiles[profileId] || [];
+  const fullI = fullList.findIndex((x) => x.id === itemA.id);
+  const fullJ = fullList.findIndex((x) => x.id === itemB.id);
+  if (fullI >= 0 && fullJ >= 0) {
+    [fullList[fullI], fullList[fullJ]] = [fullList[fullJ], fullList[fullI]];
+  }
+
   persist();
+
+  try {
+    await updateContent(profileId, itemA.id, { order: itemA.order });
+    await updateContent(profileId, itemB.id, { order: itemB.order });
+  } catch (e) {
+    console.warn('[madam] failed to save order to server:', e);
+  }
+
+  return true;
 }
 
 /* silent patch used by orientation detection / like / list toggles */

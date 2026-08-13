@@ -234,8 +234,8 @@ export function adminScreen(nav) {
               paintList();
             }
           } }, icon('edit'), 'Save'),
-          h('button', { class: 'btn-ghost small', onClick: () => { moveContent(profileId, item.id, -1); paintList(); } }, '↑'),
-          h('button', { class: 'btn-ghost small', onClick: () => { moveContent(profileId, item.id, 1); paintList(); } }, '↓'),
+          h('button', { class: 'btn-ghost small', onClick: async () => { await moveContent(profileId, item.id, -1, currentSectionFilter); paintList(); } }, '↑'),
+          h('button', { class: 'btn-ghost small', onClick: async () => { await moveContent(profileId, item.id, 1, currentSectionFilter); paintList(); } }, '↓'),
           h('button', { class: 'btn-ghost small danger', onClick: async () => { if (confirm('Remove this item?')) { const ok = await removeContent(profileId, item.id); if (ok) { paintList(); paintTabs(); paintSectionBar(); } } } }, icon('trash'), 'Remove'))
       );
     }
