@@ -3,7 +3,7 @@
    that was already posted. */
 
 import { enabledProfiles, profileById, US_SECTIONS } from '../config.js';
-import { addContent, updateContent, removeContent, moveContent, itemsFor, parseLink, posterFor, posterFallbacks, resetToSeed, getSections, addCustomSection, getItemSection } from '../store.js';
+import { addContent, updateContent, removeContent, moveContent, itemsFor, parseLink, posterFor, posterFallbacks, resetToSeed, getSections, addCustomSection, getItemSection, pushLocalToCloud } from '../store.js';
 import { h, icon, toast } from '../ui.js';
 
 const SESSION = 'madam.admin.session';
@@ -249,6 +249,7 @@ export function adminScreen(nav) {
         h('div', { class: 'wordmark' }, 'MADAM'),
         h('span', { class: 'admin-chip' }, 'Admin'),
         h('div', { class: 'admin-head-right' },
+          h('button', { class: 'btn-ghost small', onClick: async () => { await pushLocalToCloud(); paintTabs(); paintSectionBar(); paintList(); } }, '☁️ Sync to cloud'),
           h('button', { class: 'btn-ghost small', onClick: () => nav.profiles() }, 'Open her site'),
           h('button', { class: 'btn-ghost small', onClick: () => { if (confirm('Reset all content back to the seed/test list?')) { resetToSeed(); paintTabs(); paintList(); toast('Reset to seed content'); } } }, 'Reset to seed'),
           h('button', { class: 'btn-ghost small', onClick: () => { sessionStorage.removeItem(SESSION); renderLogin(); } }, 'Sign out'))),

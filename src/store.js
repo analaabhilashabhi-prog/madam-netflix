@@ -415,6 +415,29 @@ export async function removeContent(profileId, itemId) {
   return true;
 }
 
+export async function pushLocalToCloud() {
+  let count = 0;
+  for (const [pid, list] of Object.entries(state.profiles || {})) {
+    for (const item of list || []) {
+      try {
+        await serverPost('/api/content', { ...item, profileId: pid });
+        count++;
+      } catch (e) {
+        console.warn('[madam] sync item failed:', e);
+      }
+    }
+  }
+  for (const [pid, sections] of Object.entries(state.customSections || {})) {
+    for (const name of sections || []) {
+      try {
+        await serverPost('/api/sections', { profileId: pid, name });
+      } catch (_) {}
+    }
+  }
+  showToast(`\u2705 Synced ${count} item(s) to cloud database!`);
+  return count;
+}
+
 export async function syncWithServer() {
   try {
     const resContent = await fetch('/api/content');
@@ -429,8 +452,14 @@ export async function syncWithServer() {
           if (!state.profiles[pid]) state.profiles[pid] = [];
           const idx = state.profiles[pid].findIndex((x) => x.id === item.id);
           if (idx >= 0) {
-            // Server version wins — merge server data over local
-            state.profiles[pid][idx] = { ...state.profiles[pid][idx], ...item };
+            const local = state.profiles[pid][idx];
+            // Merge server data, preserving non-empty local titles & descriptions
+            state.profiles[pid][idx] = {
+              ...local,
+              ...item,
+              title: (item.title && item.title.trim()) ? item.title : (local.title || ''),
+              description: (item.description && item.description.trim()) ? item.description : (local.description || ''),
+            };
           } else {
             state.profiles[pid].push(item);
           }
