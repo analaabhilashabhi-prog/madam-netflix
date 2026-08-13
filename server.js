@@ -95,13 +95,38 @@ function checkRateLimit(ip) {
   return true;
 }
 
-// In-memory session token storage (for verified admin sessions)
-const validSessions = new Set();
+const JWT_SECRET = process.env.JWT_SECRET || crypto.createHash('sha256').update(process.env.MONGODB_URI || 'madam-netflix-secret-key-2026').digest('hex');
+
+function generateToken(email) {
+  const payload = JSON.stringify({ email, exp: Date.now() + 14 * 24 * 60 * 60 * 1000 }); // valid 14 days
+  const b64 = Buffer.from(payload).toString('base64url');
+  const hmac = crypto.createHmac('sha256', JWT_SECRET).update(b64).digest('hex');
+  return `${b64}.${hmac}`;
+}
+
+function verifyToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
+  try {
+    const [b64, hmac] = token.split('.');
+    if (!b64 || !hmac) return false;
+    const expectedHmac = crypto.createHmac('sha256', JWT_SECRET).update(b64).digest('hex');
+    const hmacBuf = Buffer.from(hmac, 'hex');
+    const expBuf = Buffer.from(expectedHmac, 'hex');
+    if (hmacBuf.length !== expBuf.length || !crypto.timingSafeEqual(hmacBuf, expBuf)) {
+      return false;
+    }
+    const payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
+    if (payload.exp && Date.now() > payload.exp) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 function isAuthorized(req) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  return token && validSessions.has(token);
+  return verifyToken(token);
 }
 
 function parseBody(req) {
@@ -175,8 +200,7 @@ const server = http.createServer(async (req, res) => {
       if (admin && admin.passwordHash && admin.salt) {
         const isValid = verifyPassword(password, admin.passwordHash, admin.salt);
         if (isValid) {
-          const sessionToken = crypto.randomBytes(32).toString('hex');
-          validSessions.add(sessionToken);
+          const sessionToken = generateToken(cleanEmail);
           return sendJson(res, 200, { success: true, token: sessionToken });
         }
       }

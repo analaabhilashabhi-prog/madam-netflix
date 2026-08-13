@@ -109,14 +109,23 @@ function getAuthHeaders() {
   };
 }
 
+async function checkResponse(res) {
+  if (res.status === 401) {
+    sessionStorage.removeItem('madam.admin.session');
+    showToast('⚠️ Session expired — please sign in again');
+    throw new Error('Unauthorized — please sign in again');
+  }
+  if (!res.ok) throw new Error(`Server returned ${res.status}`);
+  return res.json();
+}
+
 async function serverPost(url, body) {
   const res = await fetch(url, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Server returned ${res.status}`);
-  return res.json();
+  return checkResponse(res);
 }
 
 async function serverPut(url, body) {
@@ -125,8 +134,7 @@ async function serverPut(url, body) {
     headers: getAuthHeaders(),
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Server returned ${res.status}`);
-  return res.json();
+  return checkResponse(res);
 }
 
 async function serverDelete(url) {
@@ -134,8 +142,7 @@ async function serverDelete(url) {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error(`Server returned ${res.status}`);
-  return res.json();
+  return checkResponse(res);
 }
 
 /* ---------- link parsing ---------------------------------------------- */
