@@ -101,12 +101,76 @@ function persist() {
 
 /* ---------- server communication helpers -------------------------------- */
 
+const PIN_KEY = 'madam.secret.session';
+const SITE_KEY = 'madam.site.session';
+
 function getAuthHeaders() {
   const token = sessionStorage.getItem('madam.admin.session');
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
+}
+
+/* Read headers carry whichever key this tab holds — the admin session, or the
+   Secret-profile token minted by the server after a correct PIN. Without one,
+   the server simply does not send locked content. */
+function readHeaders() {
+  const admin = sessionStorage.getItem('madam.admin.session');
+  const pin = sessionStorage.getItem(PIN_KEY);
+  const site = localStorage.getItem(SITE_KEY);
+  return {
+    ...(admin ? { Authorization: `Bearer ${admin}` } : {}),
+    ...(pin ? { 'X-Madam-Pin': pin } : {}),
+    ...(site ? { 'X-Madam-Site': site } : {}),
+  };
+}
+
+/* The front door, used only when the site is deployed somewhere reachable.
+   Kept in localStorage on purpose — she should type it once, not every tab. */
+export async function siteSession() {
+  try {
+    const res = await fetch('/api/session', { headers: readHeaders() });
+    if (!res.ok) return { gate: false, unlocked: true };
+    return await res.json();
+  } catch (_) {
+    return { gate: false, unlocked: true };
+  }
+}
+
+export async function enterSite(passphrase) {
+  try {
+    const res = await fetch('/api/auth/enter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passphrase }),
+    });
+    if (!res.ok) return false;
+    const { token } = await res.json();
+    if (token) localStorage.setItem(SITE_KEY, token);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/* Section 4.4 — the PIN is verified server-side; this never sees the real one. */
+export async function unlockSecret(pin) {
+  try {
+    const res = await fetch('/api/auth/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    if (!res.ok) return false;
+    const { token } = await res.json();
+    if (!token) return false;
+    sessionStorage.setItem(PIN_KEY, token);
+    await syncWithServer(); // the Secret profile is only sent once unlocked
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function checkResponse(res) {
@@ -449,7 +513,7 @@ export async function pushLocalToCloud() {
 
 export async function syncWithServer() {
   try {
-    const resContent = await fetch('/api/content');
+    const resContent = await fetch('/api/content', { headers: readHeaders() });
     if (resContent.ok) {
       const { items } = await resContent.json();
       if (Array.isArray(items) && items.length) {
@@ -481,7 +545,7 @@ export async function syncWithServer() {
   }
 
   try {
-    const resSec = await fetch('/api/sections');
+    const resSec = await fetch('/api/sections', { headers: readHeaders() });
     if (resSec.ok) {
       const { sections } = await resSec.json();
       if (Array.isArray(sections)) {

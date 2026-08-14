@@ -1,7 +1,8 @@
 /* 4.3 — Profile selection, and 4.4 — the Secret profile PIN lock. */
 
-import { enabledProfiles, PIN } from '../config.js';
+import { enabledProfiles } from '../config.js';
 import { h, icon, sleep, goFullscreen } from '../ui.js';
+import { unlockSecret } from '../store.js';
 
 export function profilesScreen(nav) {
   const grid = h('div', { class: 'profile-grid' });
@@ -84,8 +85,13 @@ function openPin(host, onSuccess) {
     if (entered.length === 4) check();
   }
 
+  /* The PIN goes to the server, which holds the real value and the Secret
+     profile's content. A wrong PIN means that content is never sent at all. */
   async function check() {
-    if (entered === PIN) {
+    const attempt = entered;
+    msg.textContent = 'Checking…';
+    const ok = await unlockSecret(attempt);
+    if (ok) {
       overlay.classList.add('ok');
       msg.textContent = 'Welcome back 💛';
       await sleep(650);

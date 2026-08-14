@@ -1,7 +1,7 @@
 /* Router + the universal playback flow from Section 2 / Section 3. */
 
 import { profileById, enabledProfiles } from './config.js';
-import { findItem, itemsFor } from './store.js';
+import { findItem, itemsFor, siteSession } from './store.js';
 import { mount, toast } from './ui.js';
 import { playBumper } from './bumper.js';
 import { landingScreen } from './screens/landing.js';
@@ -12,6 +12,7 @@ import { playerScreen } from './screens/player.js';
 import { shortsScreen } from './screens/shorts.js';
 import { photoScreen } from './screens/photo.js';
 import { adminScreen } from './screens/admin.js';
+import { gateScreen } from './screens/gate.js';
 
 const nav = {
   letter() {
@@ -101,10 +102,22 @@ function route() {
   return nav.letter();
 }
 
-window.addEventListener('hashchange', route);
+function startRouting() {
+  window.addEventListener('hashchange', route);
+  route();
+}
 
-/* boot */
-route();
+/* boot — when the site is deployed behind a passphrase, nothing is routed and
+   no content is ever requested until the door is opened. Locally the gate is
+   off and this is one fast check that changes nothing she sees. */
+(async () => {
+  const { gate, unlocked } = await siteSession();
+  if (gate && !unlocked) {
+    show(gateScreen(startRouting));
+    return;
+  }
+  startRouting();
+})();
 
 /* tiny console helper for Abhi */
 window.madam = {

@@ -7,7 +7,9 @@ export const BUMPER = {
   maxSeconds: 30,
 };
 
-export const PIN = '1614'; // Section 4.4
+/* Section 4.4 — the PIN itself deliberately does NOT live here. This file is
+   served to the browser, so anything in it is readable by anyone who opens the
+   page. It is checked by the server (SECRET_PIN in .env, POST /api/auth/pin). */
 
 /* Section 5 — profiles. Secret / Her / Us are confirmed.
    The undecided 4th (Section 10) can be switched on by flipping `enabled`. */

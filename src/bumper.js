@@ -5,7 +5,7 @@
 
 import { BUMPER } from './config.js';
 import { createPlayer, bufferAhead } from './yt.js';
-import { h, heartLoader, iconButton, icon, sleep } from './ui.js';
+import { h, heartLoader, iconButton, icon, sleep, goFullscreen } from './ui.js';
 
 let sound = { muted: false }; // remembered across bumpers
 
@@ -31,12 +31,18 @@ export async function playBumper({ label = '', vertical = false } = {}) {
   overlay.append(muteBtn);
   if (label) overlay.append(h('div', { class: 'bumper-label' }, label));
 
+  /* The intro takes over the whole screen. The click that opened this journey
+     is still counted as a live gesture here, so the request lands; if it does
+     not, the overlay is fixed/inset-0 anyway and fills the window. */
+  goFullscreen();
+
   document.body.append(overlay);
   requestAnimationFrame(() => overlay.classList.add('in'));
 
   let player = null;
   let finished = false;
   let watcher = null;
+  let armed = false; // true once the *visible* pass has started — see below
 
   const done = new Promise((resolve) => {
     const finish = async (reason = 'ended') => {
@@ -60,7 +66,11 @@ export async function playBumper({ label = '', vertical = false } = {}) {
           videoId: BUMPER.id,
           muted: true,
           onStateChange: (e) => {
-            if (e.data === 0) finish(); // ENDED
+            /* The pre-buffer pass plays the clip muted, behind the loader. The
+               intro is only a few seconds long, so it reaches ENDED *before*
+               she has seen a single frame — which used to tear the whole
+               bumper down on the spot. Only the visible pass may end it. */
+            if (e.data === 0 && armed) finish(); // ENDED
           },
         });
         await bufferAhead(player, { targetSeconds: 12, timeout: 7000, onProgress: (p) => loader.progress(p) });
@@ -69,7 +79,21 @@ export async function playBumper({ label = '', vertical = false } = {}) {
           if (!sound.muted) player.unMute();
         } catch (_) {}
         player.volume(100);
+        armed = true;
+        player.seek(0); // the buffering pass may have run it to the end
         player.play();
+
+        /* Fullscreen wants a user gesture and unmuted audio wants one too. If
+           we got here without one, the frame would just sit there frozen —
+           drop to a muted intro rather than show her a still image. */
+        setTimeout(() => {
+          if (finished) return;
+          const st = player.state ? player.state() : -1;
+          if (st !== 1 && st !== 3 && (player.time() || 0) < 0.05) {
+            player.mute();
+            player.play();
+          }
+        }, 1200);
 
         /* The intro must play all the way through. Never cut it on a wall-clock
            timer — YouTube can take a moment to actually start after the seek,

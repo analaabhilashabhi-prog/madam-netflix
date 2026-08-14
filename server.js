@@ -14,6 +14,21 @@ const { MongoClient } = require('mongodb');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5173;
+/* Listen on loopback only. Binding every interface put the whole gift — and,
+   before the allowlist below, the .env file — on the local network for anyone
+   sharing the Wi-Fi. Set HOST=0.0.0.0 deliberately to show it on a phone. */
+const HOST = process.env.HOST || '127.0.0.1';
+/* The PIN is a server-side secret. It used to live in src/config.js, which is
+   shipped to the browser, so the lock could be read straight off the page. */
+/* No default on purpose. A fallback value written here would be a PIN published
+   in the source; if this is unset the Secret profile simply never unlocks. */
+const SECRET_PIN = String(process.env.SECRET_PIN || '');
+const LOCKED_PROFILES = new Set(['secret']);
+/* Every video here is an unlisted YouTube link — the link *is* the secret. So
+   once this is reachable from anywhere but this machine, the library must not
+   be readable without a shared passphrase. Empty = off (loopback only). */
+const SITE_PASSPHRASE = String(process.env.SITE_PASSPHRASE || '');
+const gateEnabled = () => SITE_PASSPHRASE.length > 0;
 
 let db = null;
 let client = null;
@@ -76,35 +91,41 @@ initDb();
 // In-memory rate limiting for sensitive endpoints (e.g. login)
 const loginAttempts = new Map();
 
-function checkRateLimit(ip) {
+function checkRateLimit(key, { max = 10, windowMs = 15 * 60 * 1000 } = {}) {
   const now = Date.now();
-  const windowMs = 15 * 60 * 1000; // 15 minute window
-  const maxAttempts = 10;
-  
-  const record = loginAttempts.get(ip) || { count: 0, resetAt: now + windowMs };
+
+  // opportunistic prune so the map cannot grow without bound
+  if (loginAttempts.size > 5000) {
+    for (const [k, v] of loginAttempts) if (now > v.resetAt) loginAttempts.delete(k);
+  }
+
+  const record = loginAttempts.get(key) || { count: 0, resetAt: now + windowMs };
   if (now > record.resetAt) {
     record.count = 0;
     record.resetAt = now + windowMs;
   }
-  
-  if (record.count >= maxAttempts) {
+
+  if (record.count >= max) {
     return false;
   }
   record.count++;
-  loginAttempts.set(ip, record);
+  loginAttempts.set(key, record);
   return true;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || crypto.createHash('sha256').update(process.env.MONGODB_URI || 'madam-netflix-secret-key-2026').digest('hex');
 
-function generateToken(email) {
-  const payload = JSON.stringify({ email, exp: Date.now() + 14 * 24 * 60 * 60 * 1000 }); // valid 14 days
+/* Tokens carry a scope. Without it the PIN token and the admin token are signed
+   by the same key and are therefore interchangeable — unlocking the Secret
+   profile would hand out write access to the whole library. */
+function generateToken(email, scope = 'admin', ttlMs = 14 * 24 * 60 * 60 * 1000) {
+  const payload = JSON.stringify({ email, scope, exp: Date.now() + ttlMs });
   const b64 = Buffer.from(payload).toString('base64url');
   const hmac = crypto.createHmac('sha256', JWT_SECRET).update(b64).digest('hex');
   return `${b64}.${hmac}`;
 }
 
-function verifyToken(token) {
+function verifyToken(token, expectedScope = 'admin') {
   if (!token || typeof token !== 'string' || !token.includes('.')) return false;
   try {
     const [b64, hmac] = token.split('.');
@@ -117,16 +138,70 @@ function verifyToken(token) {
     }
     const payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
     if (payload.exp && Date.now() > payload.exp) return false;
+    if (payload.scope !== expectedScope) return false;
     return true;
   } catch (_) {
     return false;
   }
 }
 
-function isAuthorized(req) {
+function bearer(req) {
   const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  return verifyToken(token);
+  return authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+}
+
+function isAuthorized(req) {
+  return verifyToken(bearer(req), 'admin');
+}
+
+/* The Secret profile needs either the PIN token or a signed-in admin. */
+function mayReadLocked(req) {
+  const token = bearer(req) || String(req.headers['x-madam-pin'] || '');
+  return verifyToken(token, 'secret') || verifyToken(token, 'admin');
+}
+
+/* The front door. Off when no passphrase is configured (local use). */
+function hasSiteAccess(req) {
+  if (!gateEnabled()) return true;
+  const token = bearer(req) || String(req.headers['x-madam-site'] || '');
+  return verifyToken(token, 'site') || verifyToken(token, 'admin');
+}
+
+/* Constant-time compare that also hides the length of the real secret. */
+function secretEquals(given, expected) {
+  const a = crypto.createHash('sha256').update(String(given ?? '')).digest();
+  const b = crypto.createHash('sha256').update(String(expected)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+/* Strip MongoDB operator keys ($gt, $where, $ne) and dotted paths before a body
+   can reach a query or a $set. Without this, a crafted body can rewrite fields
+   it was never meant to touch. */
+function scrubKeys(value, depth = 0) {
+  if (depth > 12 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => scrubKeys(v, depth + 1));
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (k.startsWith('$') || k.includes('.')) continue;
+    out[k] = scrubKeys(v, depth + 1);
+  }
+  return out;
+}
+
+/* Explicit allowlist of writable fields — a body cannot invent new ones. */
+const CONTENT_FIELDS = [
+  'id', 'profileId', 'kind', 'orientation', 'section', 'title', 'description',
+  'link', 'ytId', 'src', 'badge', 'liked', 'inList', 'order', 'addedAt',
+];
+const KNOWN_PROFILES = new Set(['her', 'us', 'secret', 'dreams']);
+
+function pickContentFields(obj) {
+  const out = {};
+  for (const key of CONTENT_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) out[key] = obj[key];
+  }
+  if (out.profileId !== undefined && !KNOWN_PROFILES.has(String(out.profileId))) return null;
+  return out;
 }
 
 function parseBody(req) {
@@ -141,7 +216,7 @@ function parseBody(req) {
     });
     req.on('end', () => {
       try {
-        resolve(JSON.parse(body || '{}'));
+        resolve(scrubKeys(JSON.parse(body || '{}')));
       } catch (_) {
         resolve({});
       }
@@ -153,8 +228,9 @@ function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
     'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'SAMEORIGIN',
+    'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
   }).end(JSON.stringify(data));
 }
@@ -178,6 +254,53 @@ const TYPES = {
   '.woff2': 'font/woff2',
 };
 
+/* Only these are ever served. The previous version joined the request path onto
+   the project root and returned whatever happened to be there, which made
+   /.env (live database password) and the entire /.git directory downloadable
+   by anyone who could reach the port. */
+const PUBLIC_FILES = new Set(['index.html', 'favicon.ico']);
+const PUBLIC_DIRS = new Set(['src', 'assets']);
+
+function resolveStatic(urlPath) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch (_) {
+    return null; // malformed percent-encoding
+  }
+  if (decoded.includes('\0')) return null;
+
+  const rel = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
+  const segments = rel.split(/[\\/]+/);
+  // no empty segments, no traversal, no dotfiles (.env, .git, .DS_Store)
+  if (segments.some((s) => !s || s === '.' || s === '..' || s.startsWith('.'))) return null;
+  // top level: an allowlisted file; deeper: inside an allowlisted directory
+  if (segments.length === 1 ? !PUBLIC_FILES.has(segments[0]) : !PUBLIC_DIRS.has(segments[0])) return null;
+  // and only file types this app actually ships
+  if (!TYPES[path.extname(segments[segments.length - 1]).toLowerCase()]) return null;
+
+  const full = path.join(ROOT, ...segments);
+  const rootWithSep = ROOT.endsWith(path.sep) ? ROOT : ROOT + path.sep;
+  return full.startsWith(rootWithSep) ? full : null;
+}
+
+/* Rules 16 & 19. Scoped to exactly what the app loads: the YouTube IFrame API,
+   Google Fonts, and remote poster/photo images. */
+const CSP = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'none'",
+  "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: https:",
+  "media-src 'self' https:",
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+  "connect-src 'self'",
+].join('; ');
+
 const server = http.createServer(async (req, res) => {
   const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const urlPath = parsedUrl.pathname;
@@ -186,15 +309,59 @@ const server = http.createServer(async (req, res) => {
 
   // API Endpoints
   if (urlPath.startsWith('/api/')) {
+    if (urlPath === '/api/health' && method === 'GET') {
+      return sendJson(res, db ? 200 : 503, { status: db ? 'ok' : 'degraded', db: !!db });
+    }
+
+    /* Tells the browser whether the front door is locked, and if this tab
+       already holds the key. Deliberately reveals nothing else. */
+    if (urlPath === '/api/session' && method === 'GET') {
+      return sendJson(res, 200, { gate: gateEnabled(), unlocked: hasSiteAccess(req) });
+    }
+
+    if (urlPath === '/api/auth/enter' && method === 'POST') {
+      if (!gateEnabled()) return sendJson(res, 200, { success: true, token: '' });
+      if (!checkRateLimit(`enter:${clientIp}`, { max: 12 })) {
+        return sendJson(res, 429, { success: false, error: 'Too many attempts. Try again in 15 minutes.' });
+      }
+      const { passphrase } = await parseBody(req);
+      if (!secretEquals(passphrase, SITE_PASSPHRASE)) {
+        return sendJson(res, 401, { success: false, error: 'That is not it.' });
+      }
+      return sendJson(res, 200, {
+        success: true,
+        token: generateToken('site', 'site', 30 * 24 * 60 * 60 * 1000), // 30d
+      });
+    }
+
+    /* The PIN is checked here, not in the browser. */
+    if (urlPath === '/api/auth/pin' && method === 'POST') {
+      if (!checkRateLimit(`pin:${clientIp}`, { max: 8 })) {
+        return sendJson(res, 429, { success: false, error: 'Too many attempts. Try again in 15 minutes.' });
+      }
+      const { pin } = await parseBody(req);
+      if (!SECRET_PIN) {
+        console.warn('[madam] SECRET_PIN is not set — the Secret profile cannot be unlocked.');
+        return sendJson(res, 401, { success: false, error: 'Incorrect PIN' });
+      }
+      if (!secretEquals(pin, SECRET_PIN)) return sendJson(res, 401, { success: false, error: 'Incorrect PIN' });
+      return sendJson(res, 200, {
+        success: true,
+        token: generateToken('secret', 'secret', 12 * 60 * 60 * 1000), // 12h
+      });
+    }
+
     if (urlPath === '/api/auth/login' && method === 'POST') {
-      if (!checkRateLimit(clientIp)) {
+      if (!checkRateLimit(`login:${clientIp}`)) {
         return sendJson(res, 429, { success: false, error: 'Too many login attempts. Please try again in 15 minutes.' });
       }
 
       const { email, password } = await parseBody(req);
       const cleanEmail = (email || '').trim();
       if (!db) {
-        return sendJson(res, 500, { success: false, error: 'Database is not connected' });
+        // Rule 18/30 — say nothing about the infrastructure behind this.
+        console.warn('[madam] login attempted while the database was unavailable');
+        return sendJson(res, 503, { success: false, error: 'Service temporarily unavailable' });
       }
       const admin = await db.collection('admin').findOne({ email: cleanEmail });
       if (admin && admin.passwordHash && admin.salt) {
@@ -208,26 +375,43 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (urlPath === '/api/content' && method === 'GET') {
+      if (!hasSiteAccess(req)) return sendJson(res, 401, { error: 'Locked' });
       const profileId = parsedUrl.searchParams.get('profileId');
-      if (db) {
-        const query = profileId ? { profileId: String(profileId) } : {};
-        // Item 17: Projection — trim MongoDB metadata (_id, passwordHash, salt)
-        const items = await db.collection('content').find(query, { projection: { _id: 0 } }).sort({ order: 1, addedAt: 1 }).toArray();
-        return sendJson(res, 200, { items });
+
+      /* Locked profiles are filtered out server-side. Previously the whole
+         library came back on an unauthenticated request and the PIN screen was
+         the only thing standing in front of it — which a `curl` walks past.
+         This is decided before the database is consulted, so the answer cannot
+         depend on whether the database happens to be up. */
+      const unlocked = mayReadLocked(req);
+      let query;
+      if (profileId) {
+        if (LOCKED_PROFILES.has(String(profileId)) && !unlocked) {
+          return sendJson(res, 401, { error: 'Locked' });
+        }
+        query = { profileId: String(profileId) };
       } else {
-        return sendJson(res, 200, { items: [] });
+        query = unlocked ? {} : { profileId: { $nin: [...LOCKED_PROFILES] } };
       }
+      if (!db) return sendJson(res, 200, { items: [] });
+
+      // Item 17: Projection — trim MongoDB metadata (_id, passwordHash, salt)
+      const items = await db.collection('content')
+        .find(query, { projection: { _id: 0 } })
+        .sort({ order: 1, addedAt: 1 })
+        .limit(500) // Rule 30 — never return an unbounded collection
+        .toArray();
+      return sendJson(res, 200, { items });
     }
 
     if (urlPath === '/api/content' && method === 'POST') {
       if (!isAuthorized(req)) {
         return sendJson(res, 401, { success: false, error: 'Unauthorized' });
       }
-      const item = await parseBody(req);
-      if (db && item && item.id && typeof item.id === 'string') {
-        const cleanId = String(item.id);
-        delete item._id; // prevent field tampering
-        await db.collection('content').updateOne({ id: cleanId }, { $set: item }, { upsert: true });
+      const body = await parseBody(req);
+      const item = body && typeof body.id === 'string' && body.id ? pickContentFields(body) : null;
+      if (db && item) {
+        await db.collection('content').updateOne({ id: String(item.id) }, { $set: item }, { upsert: true });
         return sendJson(res, 200, { success: true, item });
       }
       return sendJson(res, 400, { success: false, error: 'Invalid item data' });
@@ -237,9 +421,11 @@ const server = http.createServer(async (req, res) => {
       if (!isAuthorized(req)) {
         return sendJson(res, 401, { success: false, error: 'Unauthorized' });
       }
-      const itemId = urlPath.replace('/api/content/', '');
-      const patch = await parseBody(req);
-      delete patch._id; // prevent field tampering
+      const itemId = decodeURIComponent(urlPath.replace('/api/content/', ''));
+      const patch = pickContentFields(await parseBody(req));
+      if (!patch || !Object.keys(patch).length) {
+        return sendJson(res, 400, { success: false, error: 'Invalid item data' });
+      }
       if (db && itemId) {
         await db.collection('content').updateOne({ id: String(itemId) }, { $set: patch });
       }
@@ -250,7 +436,7 @@ const server = http.createServer(async (req, res) => {
       if (!isAuthorized(req)) {
         return sendJson(res, 401, { success: false, error: 'Unauthorized' });
       }
-      const itemId = urlPath.replace('/api/content/', '');
+      const itemId = decodeURIComponent(urlPath.replace('/api/content/', ''));
       if (db && itemId) {
         await db.collection('content').deleteOne({ id: String(itemId) });
       }
@@ -258,14 +444,25 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (urlPath === '/api/sections' && method === 'GET') {
+      if (!hasSiteAccess(req)) return sendJson(res, 401, { error: 'Locked' });
       const profileId = parsedUrl.searchParams.get('profileId');
-      if (db) {
-        const query = profileId ? { profileId: String(profileId) } : {};
-        const list = await db.collection('sections').find(query, { projection: { _id: 0 } }).toArray();
-        return sendJson(res, 200, { sections: list });
+
+      const unlocked = mayReadLocked(req);
+      let query;
+      if (profileId) {
+        if (LOCKED_PROFILES.has(String(profileId)) && !unlocked) {
+          return sendJson(res, 401, { error: 'Locked' });
+        }
+        query = { profileId: String(profileId) };
       } else {
-        return sendJson(res, 200, { sections: [] });
+        query = unlocked ? {} : { profileId: { $nin: [...LOCKED_PROFILES] } };
       }
+      if (!db) return sendJson(res, 200, { sections: [] });
+      const list = await db.collection('sections')
+        .find(query, { projection: { _id: 0 } })
+        .limit(200)
+        .toArray();
+      return sendJson(res, 200, { sections: list });
     }
 
     if (urlPath === '/api/sections' && method === 'POST') {
@@ -273,6 +470,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 401, { success: false, error: 'Unauthorized' });
       }
       const { profileId, name } = await parseBody(req);
+      if (!KNOWN_PROFILES.has(String(profileId)) || typeof name !== 'string' || !name.trim() || name.length > 120) {
+        return sendJson(res, 400, { success: false, error: 'Invalid section' });
+      }
       if (db && profileId && name) {
         await db.collection('sections').updateOne(
           { profileId: String(profileId), name: String(name) },
@@ -287,40 +487,44 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Static File Serving
-  let filePath = path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath);
-
-  if (!filePath.startsWith(ROOT)) {
-    res.writeHead(403).end('Forbidden');
+  const filePath = resolveStatic(urlPath);
+  if (!filePath) {
+    res.writeHead(404, { 'Content-Type': 'text/plain', 'X-Content-Type-Options': 'nosniff' }).end('Not found');
     return;
   }
 
-  fs.stat(filePath, (err, stat) => {
-    if (err || stat.isDirectory()) {
-      if (!err && stat.isDirectory()) filePath = path.join(filePath, 'index.html');
-      else {
-        res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
-        return;
-      }
+  fs.readFile(filePath, (readErr, data) => {
+    if (readErr) {
+      res.writeHead(404, { 'Content-Type': 'text/plain', 'X-Content-Type-Options': 'nosniff' }).end('Not found');
+      return;
     }
-    fs.readFile(filePath, (readErr, data) => {
-      if (readErr) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
-        return;
-      }
-      res.writeHead(200, {
-        'Content-Type': TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-        'Cache-Control': 'no-store, must-revalidate',
-        Pragma: 'no-cache',
-        Expires: '0',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'SAMEORIGIN',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-      }).end(data);
-    });
+    res.writeHead(200, {
+      'Content-Type': TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Cache-Control': 'no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'Content-Security-Policy': CSP,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    }).end(data);
   });
 });
 
-server.listen(PORT, () => {
+/* Refuse to serve the library to a network without a passphrase in front of it.
+   Forgetting this once, on the night you deploy, would put every unlisted link
+   in the open — so it is a startup failure, not a warning. */
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
+if (!LOOPBACK.has(HOST) && !gateEnabled()) {
+  console.error(`\n  ✗ Refusing to start.\n`);
+  console.error(`    HOST is "${HOST}", so this would be reachable beyond this machine,`);
+  console.error(`    and SITE_PASSPHRASE is empty — every memory would be readable by`);
+  console.error(`    anyone who found the address.\n`);
+  console.error(`    Set SITE_PASSPHRASE in .env, or set HOST=127.0.0.1.\n`);
+  process.exit(1);
+}
+
+server.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}/`;
   console.log(`\n  MADAM  ♥  running at ${url}`);
   console.log(`  Her side:     ${url}`);
@@ -330,3 +534,18 @@ server.listen(PORT, () => {
     exec(`start "" "${url}"`, { shell: 'cmd.exe' }, () => {});
   }
 });
+
+/* Rule 31 — stop taking requests, then close the database cleanly. */
+let shuttingDown = false;
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log('\n[madam] shutting down…');
+    server.close(async () => {
+      try { await client?.close(); } catch (_) {}
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}

@@ -96,7 +96,6 @@ export function letterScreen(nav) {
   `;
 
   const proceedToBumper = () => {
-    if (transitionTimer) clearTimeout(transitionTimer);
     goFullscreen();
     nav.profiles({ withBumper: true });
   };
@@ -119,7 +118,6 @@ export function letterScreen(nav) {
   let hintFaded = false;
   let running = false;
   let rafId = null;
-  let transitionTimer = null;
   let hasTriggeredEnd = false;
 
   function measure() {
@@ -188,10 +186,11 @@ export function letterScreen(nav) {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;
 
+      /* Wait for her tap. Fullscreen and unmuted audio both need a real user
+         gesture — a timer here would hand the intro to the browser with no
+         gesture behind it, and it would play windowed and silent. Clicking
+         anywhere on this overlay proceeds, so it is never a dead end. */
       outroMsg.classList.add('letter-outro-active');
-      transitionTimer = setTimeout(() => {
-        proceedToBumper();
-      }, 4000);
     }
   }
 
@@ -239,7 +238,6 @@ export function letterScreen(nav) {
     destroy() {
       running = false;
       if (rafId) cancelAnimationFrame(rafId);
-      if (transitionTimer) clearTimeout(transitionTimer);
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', measure);
     },

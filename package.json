@@ -5,7 +5,8 @@
   "description": "Madam G's Netflix — a birthday gift website built to spec.",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node tests/security.test.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

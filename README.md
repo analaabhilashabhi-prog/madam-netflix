@@ -25,7 +25,29 @@ app uses ES modules and the YouTube player needs a real origin.
 The admin panel is also reachable from the almost-invisible full stop in the bottom-right corner of
 the landing page. Nothing anywhere in her experience links to it.
 
-**Secret profile PIN: `1614`**
+**Secret profile PIN** — set by `SECRET_PIN` in `.env`, checked by the server, and deliberately not
+written down in this repository. It is never shipped to the browser, and the Secret profile's content
+is not sent until the PIN is accepted. If `SECRET_PIN` is unset, the profile simply never unlocks —
+there is no fallback value, because a fallback in the source is a published PIN.
+
+The server listens on `127.0.0.1` only. To open it on your local network (to show it on a phone),
+set `HOST=0.0.0.0` in `.env` — and be aware that everyone on that network can then reach it.
+
+## Putting it online for her
+
+Every video in here is an **unlisted** YouTube link, which means the link *is* the secret — anyone
+holding one can watch. So the moment this is reachable from outside this machine, the library must
+have a door in front of it.
+
+Set `SITE_PASSPHRASE` in `.env` to a word only the two of you know. She types it once and the browser
+remembers it. Without it, `/api/content` and `/api/sections` return nothing at all, so there is no
+list of links to scrape even if someone finds the address.
+
+If `HOST` is not loopback and `SITE_PASSPHRASE` is empty, **the server refuses to start** rather than
+quietly publishing everything.
+
+Run `npm test` before deploying — 34 checks covering the file allowlist, the passphrase gate, the
+Secret-profile lock, token scoping and rate limiting. It never touches the real database.
 
 ## What's wired up
 
@@ -91,5 +113,6 @@ mark in rare states (e.g. an embed error), and it keeps final say over playback 
 turns out to be visible or bothersome in testing, path 2 (self-hosted video files) is the fix — it
 would replace `src/yt.js` and swap the Admin Panel's link field for file hosting.
 
-One more note: the admin credentials are hardcoded in `src/config.js`, so anyone who reads the source
-can see them. Fine for a private gift; move them out if this ever goes somewhere public.
+One more note: admin credentials live in MongoDB, hashed with scrypt and a per-account salt — not in
+the source. Only `index.html`, `src/**` and `assets/**` are ever served; `.env`, `.git/` and
+`server.js` are not reachable over HTTP.

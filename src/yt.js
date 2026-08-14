@@ -50,7 +50,10 @@ export function bufferAhead(player, { targetSeconds = 25, timeout = 12000, onPro
       const dur = player.duration() || 0;
       const frac = player.buffered() || 0;
       const secs = dur * frac;
-      const need = Math.min(targetSeconds, Math.max(6, dur * 0.45));
+      // Never wait for more buffer than the clip actually holds — the intro
+      // bumper is only a few seconds long and would otherwise sit out the
+      // whole timeout waiting for seconds that don't exist.
+      const need = dur > 0 ? Math.min(targetSeconds, dur, Math.max(6, dur * 0.45)) : targetSeconds;
       const pct = need > 0 ? Math.min(1, secs / need) : 0;
       onProgress?.(Math.max(pct, ((performance.now() - started) / timeout) * 0.9));
       const done = (dur > 0 && secs >= need) || performance.now() - started > timeout;
