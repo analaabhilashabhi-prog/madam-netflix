@@ -1,16 +1,12 @@
 /* 4.1 — Landing page. One message, one button. */
 
 import { h, icon, goFullscreen } from '../ui.js';
+import { startLetterBgm } from '../bgm.js';
 
 export function landingScreen(nav) {
-  /* Take the whole screen from here on. On a laptop the browser's own chrome
-     leaves a viewport wider than 16:9, so a 16:9 video has to either sit in
-     black bands or lose its edges to a crop. Fullscreen makes the viewport match
-     the screen, and on a 16:9 laptop the video then fits exactly — nothing
-     cropped, nothing banded. It has to hang off her click; the browser refuses
-     a fullscreen request that isn't tied to a gesture. */
   const enter = () => {
     goFullscreen();
+    startLetterBgm();
     nav.letter();
   };
   const el = h(

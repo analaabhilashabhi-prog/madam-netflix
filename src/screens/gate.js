@@ -7,6 +7,7 @@
 
 import { h, sleep } from '../ui.js';
 import { enterSite } from '../store.js';
+import { startLetterBgm } from '../bgm.js';
 
 export function gateScreen(onUnlocked) {
   const input = h('input', {
@@ -48,6 +49,7 @@ export function gateScreen(onUnlocked) {
     const ok = await enterSite(value);
     if (ok) {
       msg.textContent = 'Come in 💛';
+      startLetterBgm();
       await sleep(500);
       onUnlocked();
       return;

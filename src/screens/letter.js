@@ -4,8 +4,7 @@
    - "Enjoy the ride my Madam Ji ❤️" transition overlay at the end before Netflix intro. */
 
 import { goFullscreen } from '../ui.js';
-import { createPlayer } from '../yt.js';
-import { LETTER_BGM } from '../config.js';
+import { startLetterBgm, unlockAudio, toggleLetterBgm, stopLetterBgm } from '../bgm.js';
 
 const LETTER = `Before You Enter Our Little World
 
@@ -97,17 +96,7 @@ export function letterScreen(nav) {
     </div>
   `;
 
-  /* ---- Background Music (BGM) ---- */
-  let bgmPlayer = null;
-  let bgmMuted = false;
-  let bgmStarted = false;
-
-  const bgmContainer = document.createElement('div');
-  bgmContainer.style.cssText = 'position:fixed; width:1px; height:1px; opacity:0.001; pointer-events:none; z-index:-1; left:-9999px; top:-9999px;';
-  
-  const bgmHost = document.createElement('div');
-  bgmContainer.appendChild(bgmHost);
-
+  /* ---- Background Music (BGM) UI ---- */
   const bgmControl = document.createElement('div');
   bgmControl.id = 'letter-bgm-control';
   bgmControl.className = 'letter-bgm-control';
@@ -137,31 +126,11 @@ export function letterScreen(nav) {
 
   bgmBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!bgmPlayer) return;
-    if (bgmMuted) {
-      bgmPlayer.unMute();
-      bgmPlayer.play();
-      bgmMuted = false;
-      updateBgmUI(true);
-    } else {
-      bgmPlayer.pause();
-      bgmMuted = true;
-      updateBgmUI(false);
-    }
+    toggleLetterBgm();
   });
 
-  const stopBgm = () => {
-    if (bgmPlayer) {
-      try {
-        bgmPlayer.pause();
-        bgmPlayer.destroy();
-      } catch (_) {}
-      bgmPlayer = null;
-    }
-  };
-
   const proceedToBumper = () => {
-    stopBgm();
+    stopLetterBgm();
     goFullscreen();
     nav.profiles({ withBumper: true });
   };
@@ -175,7 +144,6 @@ export function letterScreen(nav) {
   el.appendChild(spacer);
   el.appendChild(endSpace);
   el.appendChild(outroMsg);
-  el.appendChild(bgmContainer);
   el.appendChild(bgmControl);
 
   /* ---- Animation state ---- */
@@ -285,42 +253,13 @@ export function letterScreen(nav) {
 
   return {
     el,
-    async begin() {
+    begin() {
       running = true;
 
-      // Start BGM
-      if (LETTER_BGM && LETTER_BGM.videoId) {
-        try {
-          bgmPlayer = await createPlayer(bgmHost, {
-            videoId: LETTER_BGM.videoId,
-            start: LETTER_BGM.start || 48,
-            loop: true,
-            muted: false,
-          });
-          if (bgmPlayer) {
-            if (LETTER_BGM.start) bgmPlayer.seek(LETTER_BGM.start);
-            bgmPlayer.volume(LETTER_BGM.volume || 80);
-            bgmPlayer.unMute();
-            bgmPlayer.play();
-            bgmStarted = true;
-            updateBgmUI(true);
-          }
-        } catch (err) {
-          console.warn('[madam] Could not initialize letter BGM:', err);
-        }
-      }
+      // Start/sync BGM with UI
+      startLetterBgm(updateBgmUI);
 
-      const enableAudioOnGesture = () => {
-        if (bgmPlayer && (!bgmStarted || bgmPlayer.state() !== 1)) {
-          if (LETTER_BGM.start && bgmPlayer.time() < LETTER_BGM.start) {
-            bgmPlayer.seek(LETTER_BGM.start);
-          }
-          bgmPlayer.unMute();
-          bgmPlayer.play();
-          bgmStarted = true;
-          updateBgmUI(true);
-        }
-      };
+      const enableAudioOnGesture = () => unlockAudio();
       window.addEventListener('click', enableAudioOnGesture, { once: true });
       window.addEventListener('touchstart', enableAudioOnGesture, { once: true });
       el.addEventListener('scroll', enableAudioOnGesture, { once: true });
@@ -342,7 +281,7 @@ export function letterScreen(nav) {
     },
     destroy() {
       running = false;
-      stopBgm();
+      stopLetterBgm();
       if (rafId) cancelAnimationFrame(rafId);
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', measure);
