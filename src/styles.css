@@ -984,16 +984,23 @@ img { display: block; }
    fight the images for contrast and the letter loses. */
 /* ONE layer only. Two stacked gradients multiply, and the photographs behind
    them disappear. Darkest down the centre column where the words sit, opening
-   up towards the edges so the wall is actually visible. */
+   up towards the edges so the wall is still visible there.
+
+   Turn these two numbers up for more black behind the letter, down for more
+   photograph. --letter-scrim is the band the words sit in. */
+#letter-root {
+  --letter-scrim: 0.8;
+  --letter-scrim-edge: 0.34;
+}
 #letter-bg-scrim {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background:
     linear-gradient(to right,
-      rgba(0, 0, 0, 0.15) 0%,
-      rgba(0, 0, 0, 0.52) 22%,
-      rgba(0, 0, 0, 0.58) 50%,
-      rgba(0, 0, 0, 0.52) 78%,
-      rgba(0, 0, 0, 0.15) 100%);
+      rgba(0, 0, 0, var(--letter-scrim-edge)) 0%,
+      rgba(0, 0, 0, var(--letter-scrim)) 20%,
+      rgba(0, 0, 0, var(--letter-scrim)) 50%,
+      rgba(0, 0, 0, var(--letter-scrim)) 80%,
+      rgba(0, 0, 0, var(--letter-scrim-edge)) 100%);
 }
 /* the words themselves get a soft halo so they never sit flat on a photo */
 .letter-para, .letter-heading-para {
