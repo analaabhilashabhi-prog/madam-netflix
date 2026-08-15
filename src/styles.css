@@ -989,18 +989,14 @@ img { display: block; }
    Turn these two numbers up for more black behind the letter, down for more
    photograph. --letter-scrim is the band the words sit in. */
 #letter-root {
-  --letter-scrim: 0.8;
-  --letter-scrim-edge: 0.34;
+  --letter-scrim: 0.8; /* one number now — it covers the whole screen evenly */
 }
+/* Even across the whole screen. It used to open up towards the edges, which
+   was fine while the text sat in a centred column — but the letter runs corner
+   to corner now, so the words at the edges were fighting bright photographs. */
 #letter-bg-scrim {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background:
-    linear-gradient(to right,
-      rgba(0, 0, 0, var(--letter-scrim-edge)) 0%,
-      rgba(0, 0, 0, var(--letter-scrim)) 20%,
-      rgba(0, 0, 0, var(--letter-scrim)) 50%,
-      rgba(0, 0, 0, var(--letter-scrim)) 80%,
-      rgba(0, 0, 0, var(--letter-scrim-edge)) 100%);
+  background: rgba(0, 0, 0, var(--letter-scrim));
 }
 /* the words themselves get a soft halo so they never sit flat on a photo */
 .letter-para, .letter-heading-para {
@@ -1017,27 +1013,6 @@ img { display: block; }
   will-change: transform;
 }
 
-/* ---------- the pen ---------------------------------------------------- */
-#letter-pen {
-  position: absolute; top: 0; left: 0;
-  width: 34px; height: 34px;
-  margin: -26px 0 0 -4px; /* nib tip sits on the baseline, not the icon corner */
-  color: #f6e7c8;
-  opacity: 0;
-  transition: opacity 260ms var(--ease);
-  pointer-events: none;
-  will-change: transform;
-  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.8));
-}
-#letter-pen.writing { opacity: 1; }
-#letter-pen svg { width: 100%; height: 100%; display: block; transform: rotate(-8deg); }
-/* the wet spot of ink under the nib */
-#letter-pen::after {
-  content: ''; position: absolute; left: 3px; bottom: 2px;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: rgba(255, 246, 226, 0.85);
-  filter: blur(2.5px);
-}
 
 .letter-heading-para {
   margin-bottom: 1.1em;
@@ -1067,16 +1042,16 @@ img { display: block; }
    No will-change here on purpose. There are around two thousand of these, and
    hinting every one of them asks the browser to promote two thousand layers,
    which costs far more than it saves and is felt as scroll stutter. */
-/* Visible by default. The words are hidden only once the script has taken
-   charge of them and added .ink to the root — so if the writing pass ever
-   fails to run, she gets a readable letter rather than an empty screen.
-   The script sets an explicit inline opacity per word, which wins over both. */
+/* Visible by default. Words drop to the resting value only once the script has
+   taken charge of them and added .ink to the root — so if the reveal ever
+   fails to run, she gets a readable letter rather than a blank screen. The
+   script sets an explicit inline opacity per word, which wins over both. */
 .letter-w {
   display: inline-block;
   opacity: 1;
   filter: none;
 }
-#letter-root.ink .letter-w { opacity: 0; }
+#letter-root.ink .letter-w { opacity: 0.16; }
 
 /* The lines that carry weight. Cookie has one weight only, so asking for bold
    makes the browser synthesise it and the joined strokes smear. Emphasis comes

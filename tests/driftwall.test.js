@@ -183,14 +183,14 @@ const check = (name, fn) =>
      el.style.opacity = '', which removes the inline value and drops the word
      back to a stylesheet rule that hides it. */
   await check('a written word is never handed back to the stylesheet', () => {
-    const d = new JSDOM('<!doctype html><style>.letter-w{opacity:1}#letter-root.ink .letter-w{opacity:0}</style>'
+    const d = new JSDOM('<!doctype html><style>.letter-w{opacity:1}#letter-root.ink .letter-w{opacity:0.16}</style>'
       + '<div id="letter-root" class="ink"><span class="letter-w">word</span></div>');
     const el = d.window.document.querySelector('.letter-w');
     const root = d.window.document.getElementById('letter-root');
     const computed = () => d.window.getComputedStyle(el).opacity;
 
     el.style.opacity = '';
-    assert.strictEqual(computed(), '0', 'clearing the inline value must hide it — this is the trap');
+    assert.strictEqual(computed(), '0.16', 'clearing the inline value drops it to the resting rule — this is the trap');
     el.style.opacity = '1';
     assert.strictEqual(computed(), '1', 'an explicit 1 must win over the hiding rule');
 
