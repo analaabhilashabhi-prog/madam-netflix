@@ -336,11 +336,11 @@ export function letterScreen(nav) {
            colour wash over them, fade = how far the edges dissolve, speed =
            drift rate in pixels per second. */
         wall = driftWall(urls.length ? urls : LETTER_GALLERY_PLACEHOLDERS, {
-          columns: 7,
+          columns: 'auto', // as many as it takes to fill her screen
           speed: 34,
           dim: 0.9,
           tint: 0.12,
-          fade: 0.25,
+          fade: 0.1,
         });
         if (wall) bgHost.appendChild(wall.el);
       });

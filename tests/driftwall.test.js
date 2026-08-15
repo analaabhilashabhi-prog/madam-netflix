@@ -74,6 +74,22 @@ const check = (name, fn) =>
     wall.destroy();
   });
 
+  await check('it fills the screen at any window size', () => {
+    const scale = 1.3;
+    const turn = 14;
+    const colWidth = 200 + 18;
+    for (const [w, h] of [[1920, 1080], [1536, 864], [1366, 768], [2560, 1440], [3840, 2160], [820, 1180], [390, 844]]) {
+      Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+      const wall = driftWall(photos(15), { columns: 'auto' });
+      const cols = wall.el.querySelectorAll('.drift-wall__col').length;
+      // width the plane actually projects to once scaled and yawed
+      const projected = cols * colWidth * scale * Math.cos((turn * Math.PI) / 180);
+      assert.ok(projected >= w, `${w}x${h}: wall spans ${Math.round(projected)}px, screen is ${w}px`);
+      wall.destroy();
+    }
+  });
+
   await check('no photos means no wall at all', () => {
     assert.strictEqual(driftWall([]), null);
     assert.strictEqual(driftWall(null), null);

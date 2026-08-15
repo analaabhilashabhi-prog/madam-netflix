@@ -47,7 +47,9 @@ export function driftWall(photoUrls, options = {}) {
   if (!urls.length) return null;
 
   const {
-    columns = 7, // wide enough to reach both edges of a laptop screen
+    columns = 'auto', // 'auto' works out how many it takes to fill the screen
+    scale = 1.3, // the plane is blown up past the viewport so no edge shows
+    overfill = 1.35, // and then some, to survive the perspective squeeze
     tileWidth = 200,
     tileHeight = 132,
     gap = 18,
@@ -60,7 +62,7 @@ export function driftWall(photoUrls, options = {}) {
     speed = 42,
     direction = 'up',
     variance = 0.45,
-    fade = 0.25, // how far the edges dissolve; higher hides more of the wall
+    fade = 0.1, // how far the edges dissolve; higher hides more of the wall
     dim = 0.9, // resting opacity of a tile
     tint = 0.12, // strength of the colour wash over each tile
     grayscale = false,
@@ -96,21 +98,43 @@ export function driftWall(photoUrls, options = {}) {
   const plane = document.createElement('div');
   plane.className = 'drift-wall__plane';
   plane.style.transform =
-    `translate(-50%, -50%) scale(1.18) ` +
+    `translate(-50%, -50%) scale(${scale}) ` +
     `rotateX(${tilt}deg) rotateY(${turn}deg) rotateZ(${roll}deg) ` +
     `translateZ(${-depth}px)`;
   root.append(plane);
 
-  /* deal the photos out across the columns */
-  const columnItems = Array.from({ length: columns }, () => []);
-  items.forEach((url, i) => columnItems[i % columns].push(url));
-  for (const col of columnItems) if (!col.length) col.push(items[0]);
-
   const unit = tileHeight + gap;
+  const colWidth = tileWidth + gap;
   const tracks = [];
   const meta = [];
+  let columnItems = [];
+  let velocities = [];
+  let offsets = [];
+
+  /* How many columns it takes to cover the screen edge to edge. The plane is
+     scaled up and rotated, and rotateY foreshortens its projected width, so
+     the raw width has to beat the viewport by that factor before it fills. */
+  function columnCount() {
+    if (columns !== 'auto') return Math.max(1, columns);
+    const vw = (typeof window !== 'undefined' && window.innerWidth) || 1280;
+    const foreshorten = Math.cos((Math.abs(turn) * Math.PI) / 180) || 1;
+    return Math.max(3, Math.ceil((vw * overfill) / (colWidth * scale * foreshorten)));
+  }
 
   function build(viewportHeight) {
+    const count = columnCount();
+
+    /* deal the photos out across the columns */
+    columnItems = Array.from({ length: count }, () => []);
+    items.forEach((url, i) => columnItems[i % count].push(url));
+    for (const col of columnItems) if (!col.length) col.push(items[0]);
+
+    const dirSign = direction === 'up' ? 1 : -1;
+    velocities = columnItems.map((_, c) => {
+      const altSign = c % 2 === 0 ? 1 : -1; // neighbours drift opposite ways
+      return speed * columnFactor(c, variance) * dirSign * altSign;
+    });
+
     plane.replaceChildren();
     tracks.length = 0;
     meta.length = 0;
@@ -161,25 +185,18 @@ export function driftWall(photoUrls, options = {}) {
       plane.append(column);
       tracks[c] = track;
     });
+
+    // stagger the columns so they do not all start on the same tile boundary
+    offsets = columnItems.map((_, c) => (meta[c]?.copyHeight || 0) * ((c * 0.37) % 1));
   }
 
-  const dirSign = direction === 'up' ? 1 : -1;
-  const velocities = columnItems.map((_, c) => {
-    const altSign = c % 2 === 0 ? 1 : -1; // neighbouring columns drift opposite ways
-    return speed * columnFactor(c, variance) * dirSign * altSign;
-  });
-
-  const offsets = columnItems.map((_, c) => c * 0.37);
   let raf = null;
   let lastTs = null;
   let reduced = prefersReducedMotion();
   let viewport = window.innerHeight || 600;
+  let viewportW = window.innerWidth || 1280;
 
   build(viewport);
-  // stagger the columns so they do not all start on the same tile boundary
-  columnItems.forEach((_, c) => {
-    offsets[c] = (meta[c]?.copyHeight || 0) * ((c * 0.37) % 1);
-  });
 
   function paint() {
     for (let c = 0; c < tracks.length; c++) {
@@ -226,14 +243,17 @@ export function driftWall(photoUrls, options = {}) {
   };
   motionQuery?.addEventListener?.('change', onMotionChange);
 
-  /* Rebuild only when the viewport height changes enough to expose a gap. */
+  /* Rebuild when the window changes enough to expose an edge. Width matters as
+     much as height now that the column count is derived from it. */
   let resizeTimer = null;
   const onResize = () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const h = window.innerHeight || 600;
-      if (Math.abs(h - viewport) < 80) return;
+      const w = window.innerWidth || 1280;
+      if (Math.abs(h - viewport) < 80 && Math.abs(w - viewportW) < 80) return;
       viewport = h;
+      viewportW = w;
       build(viewport);
       paint();
     }, 200);
