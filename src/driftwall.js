@@ -32,6 +32,52 @@ const motionMedia = () => {
 
 const prefersReducedMotion = () => motionMedia()?.matches === true;
 
+/* Every photo keeps its own shape, so its height has to be measured before the
+   wall can be laid out. Ratios are cached across rebuilds and across mounts —
+   the browser has the image by then, so this costs nothing after the first. */
+const DEFAULT_RATIO = 3 / 2;
+const ratioCache = new Map();
+
+function measureRatio(url, timeout) {
+  if (ratioCache.has(url)) return Promise.resolve(ratioCache.get(url));
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ratio) => {
+      if (settled) return;
+      settled = true;
+      const safe = Number.isFinite(ratio) && ratio > 0 ? ratio : DEFAULT_RATIO;
+      ratioCache.set(url, safe);
+      resolve(safe);
+    };
+    // a photo that never loads must not hold the whole wall up
+    setTimeout(() => finish(DEFAULT_RATIO), timeout);
+    try {
+      const img = new Image();
+      img.onload = () => finish(img.naturalWidth / img.naturalHeight);
+      img.onerror = () => finish(DEFAULT_RATIO);
+      img.decoding = 'async';
+      img.src = url;
+    } catch (_) {
+      finish(DEFAULT_RATIO);
+    }
+  });
+}
+
+/* Masonry packing: each photo goes into whichever column is currently shortest.
+   That is what stops a column of tall portraits running away from a column of
+   wide landscapes and leaving a ragged, half-empty wall. */
+export function packColumns(sized, count, gap = 0) {
+  const cols = Array.from({ length: count }, () => []);
+  const heights = new Array(count).fill(0);
+  for (const item of sized) {
+    let shortest = 0;
+    for (let i = 1; i < count; i++) if (heights[i] < heights[shortest]) shortest = i;
+    cols[shortest].push(item);
+    heights[shortest] += item.height + gap;
+  }
+  return cols;
+}
+
 /* The wall needs enough tiles to fill every column twice over, otherwise the
    wrap is visible as a gap. With fewer photos than that, repeat them. */
 function padToMinimum(list, minimum) {
@@ -72,6 +118,11 @@ export function driftWall(photoUrls, options = {}) {
     grayscale = false,
     overlayColor = '#060010',
     minimumTiles = 10,
+    /* Pinterest-style: how tall a tile may get relative to its width, so a
+       freak panorama or a very long portrait cannot dominate a column. */
+    minAspect = 0.5, // widest allowed: 2:1 landscape
+    maxAspect = 1.9, // tallest allowed: roughly 1:1.9 portrait
+    measureTimeout = 5000,
     className = '',
   } = options;
 
@@ -125,13 +176,21 @@ export function driftWall(photoUrls, options = {}) {
     return Math.max(3, Math.ceil((vw * overfill) / (colWidth * scale * foreshorten)));
   }
 
+  /* url -> the height this photo gets at the current tile width, from its own
+     aspect ratio. Clamped so nothing extreme swallows a column. */
+  function heightFor(url) {
+    const ratio = ratioCache.get(url) || DEFAULT_RATIO;
+    const clamped = Math.min(Math.max(1 / ratio, minAspect), maxAspect);
+    return Math.round(tileWidth * clamped);
+  }
+
   function build(viewportHeight) {
     const count = columnCount();
 
-    /* deal the photos out across the columns */
-    columnItems = Array.from({ length: count }, () => []);
-    items.forEach((url, i) => columnItems[i % count].push(url));
-    for (const col of columnItems) if (!col.length) col.push(items[0]);
+    /* pack the photos by height, shortest column first */
+    const sized = items.map((url) => ({ url, height: heightFor(url) }));
+    columnItems = packColumns(sized, count, gap);
+    for (const col of columnItems) if (!col.length) col.push(sized[0]);
 
     const dirSign = direction === 'up' ? 1 : -1;
     velocities = columnItems.map((_, c) => {
@@ -147,15 +206,17 @@ export function driftWall(photoUrls, options = {}) {
     /* Tiles sit on a rotated plane and are constantly moving into view, so
        lazy loading shows blank gaps as they arrive. With a small wall just
        load everything up front; only defer once there is a lot of it. */
+    const columnHeight = (col) =>
+      Math.max(unit, col.reduce((sum, item) => sum + item.height + gap, 0));
+
     let total = 0;
     columnItems.forEach((col) => {
-      const ch = Math.max(unit, col.length * unit);
-      total += col.length * Math.max(2, Math.ceil((viewportHeight * 1.6) / ch) + 1);
+      total += col.length * Math.max(2, Math.ceil((viewportHeight * 1.6) / columnHeight(col)) + 1);
     });
     const loading = total > 90 ? 'lazy' : 'eager';
 
     columnItems.forEach((col, c) => {
-      const copyHeight = Math.max(unit, col.length * unit);
+      const copyHeight = columnHeight(col);
       const copies = Math.max(2, Math.ceil((viewportHeight * 1.6) / copyHeight) + 1);
       meta[c] = { copyHeight, copies };
 
@@ -165,9 +226,11 @@ export function driftWall(photoUrls, options = {}) {
       track.className = 'drift-wall__track';
 
       for (let copy = 0; copy < copies; copy++) {
-        for (const url of col) {
+        for (const { url, height } of col) {
           const tile = document.createElement('div');
           tile.className = 'drift-wall__tile';
+          // its own shape — this is what makes the wall read as Pinterest
+          tile.style.height = `${height + gap}px`;
           const inner = document.createElement('span');
           inner.className = 'drift-wall__inner';
           const img = document.createElement('img');
@@ -197,18 +260,27 @@ export function driftWall(photoUrls, options = {}) {
 
   let raf = null;
   let lastTs = null;
+  let destroyed = false;
   let reduced = prefersReducedMotion();
   let viewport = window.innerHeight || 600;
   let viewportW = window.innerWidth || 1280;
-
-  build(viewport);
 
   function paint() {
     for (let c = 0; c < tracks.length; c++) {
       if (tracks[c]) tracks[c].style.transform = `translate3d(0, ${-offsets[c]}px, 0)`;
     }
   }
-  paint();
+
+  /* Measure every photo first, then lay out once. Building on guessed heights
+     and re-laying out afterwards would make the whole wall visibly jump. */
+  const ready = Promise.all([...new Set(items)].map((url) => measureRatio(url, measureTimeout)))
+    .then(() => {
+      if (destroyed) return;
+      build(viewport);
+      paint();
+      start();
+    })
+    .catch(() => {});
 
   function frame(ts) {
     if (lastTs === null) lastTs = ts;
@@ -229,7 +301,7 @@ export function driftWall(photoUrls, options = {}) {
   }
 
   function start() {
-    if (raf || reduced) return;
+    if (raf || reduced || destroyed || !tracks.length) return;
     lastTs = null;
     raf = requestAnimationFrame(frame);
   }
@@ -256,6 +328,7 @@ export function driftWall(photoUrls, options = {}) {
     resizeTimer = setTimeout(() => {
       const h = window.innerHeight || 600;
       const w = window.innerWidth || 1280;
+      if (destroyed || !tracks.length) return;
       if (Math.abs(h - viewport) < 80 && Math.abs(w - viewportW) < 80) return;
       viewport = h;
       viewportW = w;
@@ -269,11 +342,11 @@ export function driftWall(photoUrls, options = {}) {
   const onVisibility = () => (document.hidden ? stop() : start());
   document.addEventListener('visibilitychange', onVisibility);
 
-  start();
-
   return {
     el: root,
+    ready, // resolves once the photos have been measured and laid out
     destroy() {
+      destroyed = true;
       stop();
       clearTimeout(resizeTimer);
       motionQuery?.removeEventListener?.('change', onMotionChange);
