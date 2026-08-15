@@ -9,6 +9,7 @@ export const BUMPER = {
 
 export const LETTER_BGM = {
   videoId: 'kWTiVDwe6MA',
+  start: 48,
   volume: 80,
 };
 

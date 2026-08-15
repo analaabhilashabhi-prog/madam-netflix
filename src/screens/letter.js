@@ -293,10 +293,12 @@ export function letterScreen(nav) {
         try {
           bgmPlayer = await createPlayer(bgmHost, {
             videoId: LETTER_BGM.videoId,
+            start: LETTER_BGM.start || 48,
             loop: true,
             muted: false,
           });
           if (bgmPlayer) {
+            if (LETTER_BGM.start) bgmPlayer.seek(LETTER_BGM.start);
             bgmPlayer.volume(LETTER_BGM.volume || 80);
             bgmPlayer.unMute();
             bgmPlayer.play();
@@ -310,6 +312,9 @@ export function letterScreen(nav) {
 
       const enableAudioOnGesture = () => {
         if (bgmPlayer && (!bgmStarted || bgmPlayer.state() !== 1)) {
+          if (LETTER_BGM.start && bgmPlayer.time() < LETTER_BGM.start) {
+            bgmPlayer.seek(LETTER_BGM.start);
+          }
           bgmPlayer.unMute();
           bgmPlayer.play();
           bgmStarted = true;
