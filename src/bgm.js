@@ -1,20 +1,68 @@
 /* Background music manager for Madam Netflix.
-   Ensures audio starts seamlessly on user interaction (landing click / scroll)
-   starting at timestamp (48s). */
+   Uses direct HTML5 Audio (assets/music/letter-bgm.mp3) for instant,
+   seamless unmuted audio playback on user click/scroll, with YouTube iframe
+   as fallback. */
 
 import { LETTER_BGM } from './config.js';
 import { createPlayer, loadYouTubeAPI } from './yt.js';
 
+let audioElement = null;
 let bgmPlayer = null;
 let bgmContainer = null;
 let bgmHost = null;
 let isPlaying = false;
 let updateCallback = null;
 
-// Pre-load YouTube API in background as soon as module loads
-loadYouTubeAPI();
+// Preload HTML5 audio element
+function getAudioElement() {
+  if (!audioElement) {
+    audioElement = new Audio();
+    audioElement.src = LETTER_BGM.src || 'assets/music/letter-bgm.mp3';
+    audioElement.loop = true;
+    audioElement.volume = (LETTER_BGM.volume || 80) / 100;
+  }
+  return audioElement;
+}
 
-function ensureContainer() {
+export function startLetterBgm(onUpdate) {
+  if (onUpdate) updateCallback = onUpdate;
+
+  const audio = getAudioElement();
+  audio.volume = (LETTER_BGM.volume || 80) / 100;
+  
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      isPlaying = true;
+      updateCallback?.(true);
+    }).catch(() => {
+      // If browser blocked initial autoplay without gesture, unlock on first touch
+      isPlaying = false;
+      updateCallback?.(false);
+      startYouTubeFallback();
+    });
+  }
+}
+
+export function unlockAudio() {
+  const audio = getAudioElement();
+  if (audio.paused) {
+    audio.play().then(() => {
+      isPlaying = true;
+      updateCallback?.(true);
+    }).catch(() => {
+      startYouTubeFallback();
+    });
+  } else {
+    isPlaying = true;
+    updateCallback?.(true);
+  }
+}
+
+async function startYouTubeFallback() {
+  if (bgmPlayer) return;
+  if (!LETTER_BGM || !LETTER_BGM.videoId) return;
+
   if (!bgmContainer || !document.body.contains(bgmContainer)) {
     bgmContainer = document.createElement('div');
     bgmContainer.id = 'bgm-container';
@@ -23,79 +71,46 @@ function ensureContainer() {
     bgmContainer.appendChild(bgmHost);
     document.body.appendChild(bgmContainer);
   }
-}
-
-export async function startLetterBgm(onUpdate) {
-  if (onUpdate) updateCallback = onUpdate;
-  ensureContainer();
-
-  if (!LETTER_BGM || !LETTER_BGM.videoId) return;
-
-  const startSecs = LETTER_BGM.start || 48;
-
-  if (bgmPlayer) {
-    try {
-      bgmPlayer.seek(startSecs);
-      bgmPlayer.volume(LETTER_BGM.volume || 80);
-      bgmPlayer.unMute();
-      bgmPlayer.play();
-      isPlaying = true;
-      updateCallback?.(true);
-      return;
-    } catch (_) {}
-  }
 
   try {
     bgmPlayer = await createPlayer(bgmHost, {
       videoId: LETTER_BGM.videoId,
-      start: startSecs,
+      start: LETTER_BGM.start || 48,
       loop: true,
       muted: false,
     });
     if (bgmPlayer) {
-      bgmPlayer.seek(startSecs);
+      bgmPlayer.seek(LETTER_BGM.start || 48);
       bgmPlayer.volume(LETTER_BGM.volume || 80);
       bgmPlayer.unMute();
       bgmPlayer.play();
       isPlaying = true;
       updateCallback?.(true);
     }
-  } catch (err) {
-    console.warn('[madam] Could not start letter BGM:', err);
-  }
-}
-
-export function unlockAudio() {
-  if (bgmPlayer) {
-    try {
-      const startSecs = LETTER_BGM.start || 48;
-      if (bgmPlayer.time() < 5) {
-        bgmPlayer.seek(startSecs);
-      }
-      bgmPlayer.unMute();
-      bgmPlayer.play();
-      isPlaying = true;
-      updateCallback?.(true);
-    } catch (_) {}
-  }
+  } catch (_) {}
 }
 
 export function toggleLetterBgm() {
-  if (!bgmPlayer) return false;
+  const audio = getAudioElement();
   if (isPlaying) {
-    try { bgmPlayer.pause(); } catch (_) {}
+    audio.pause();
+    if (bgmPlayer) try { bgmPlayer.pause(); } catch (_) {}
     isPlaying = false;
     updateCallback?.(false);
     return false;
   } else {
     unlockAudio();
-    isPlaying = true;
-    updateCallback?.(true);
     return true;
   }
 }
 
 export function stopLetterBgm() {
+  if (audioElement) {
+    try {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    } catch (_) {}
+  }
   if (bgmPlayer) {
     try {
       bgmPlayer.pause();

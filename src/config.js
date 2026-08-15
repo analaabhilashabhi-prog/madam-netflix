@@ -8,6 +8,7 @@ export const BUMPER = {
 };
 
 export const LETTER_BGM = {
+  src: 'assets/music/letter-bgm.mp3',
   videoId: 'kWTiVDwe6MA',
   start: 48,
   volume: 80,
