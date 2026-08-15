@@ -215,26 +215,60 @@ export function letterScreen(nav) {
 
   const onScroll = () => {
     if (running) {
-      unlockAudio();
+      unlockAudio(); // no-op once it is already playing
       loop();
     }
   };
+
+  const GESTURES = ['pointerdown', 'click', 'touchend', 'keydown'];
+  const enableAudioOnGesture = () => unlockAudio();
+
+  /* The one tap the browser needs before it will let the music be heard.
+     Only ever shown when playback was actually refused. */
+  let soundPrompt = null;
+  function showSoundPrompt() {
+    if (soundPrompt) return;
+    soundPrompt = document.createElement('div');
+    soundPrompt.id = 'letter-sound-gate';
+    soundPrompt.innerHTML = `
+      <div class="sound-gate-card">
+        <div class="sound-gate-note">🎧</div>
+        <div class="sound-gate-title">Put your sound on, my love.</div>
+        <div class="sound-gate-sub">I picked a song to go with this.</div>
+        <button class="btn-white big" type="button">Start the letter</button>
+      </div>
+    `;
+
+    const dismiss = async () => {
+      await unlockAudio(); // this call is inside the click — the browser allows it
+      soundPrompt.classList.add('out');
+      setTimeout(() => {
+        soundPrompt?.remove();
+        soundPrompt = null;
+      }, 420);
+    };
+
+    soundPrompt.addEventListener('click', dismiss);
+    el.appendChild(soundPrompt);
+    requestAnimationFrame(() => soundPrompt.classList.add('in'));
+  }
 
   return {
     el,
     begin() {
       running = true;
 
-      // Start BGM automatically
-      startLetterBgm();
+      /* Try to start the music straight away — that works when she arrived by
+         tapping something (the passphrase door, or the landing button). On a
+         cold page load there has been no tap yet, the browser refuses, and
+         scrolling will NOT change its mind: wheel and scroll do not count as
+         user activation. So in that case, ask for one tap. */
+      startLetterBgm().then((playing) => {
+        if (!playing && running) showSoundPrompt();
+      });
 
-      const enableAudioOnGesture = () => unlockAudio();
-      window.addEventListener('pointerdown', enableAudioOnGesture);
-      window.addEventListener('click', enableAudioOnGesture);
-      window.addEventListener('touchstart', enableAudioOnGesture);
-      window.addEventListener('wheel', enableAudioOnGesture);
-      window.addEventListener('keydown', enableAudioOnGesture);
-      el.addEventListener('scroll', enableAudioOnGesture);
+      /* Real activation events only — wheel/scroll can never unlock audio. */
+      for (const ev of GESTURES) window.addEventListener(ev, enableAudioOnGesture);
 
       requestAnimationFrame(() => {
         measure();
@@ -253,10 +287,13 @@ export function letterScreen(nav) {
     },
     destroy() {
       running = false;
+      soundPrompt?.remove();
+      soundPrompt = null;
       stopLetterBgm();
       if (rafId) cancelAnimationFrame(rafId);
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', measure);
+      for (const ev of GESTURES) window.removeEventListener(ev, enableAudioOnGesture);
     },
   };
 }
