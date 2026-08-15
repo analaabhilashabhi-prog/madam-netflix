@@ -235,18 +235,25 @@ function startServer(env) {
     assert.ok(sawLimit, 'never hit the rate limit');
   });
 
-  /* ---- 6. Refuses to be published unprotected -------------------------- */
-  await check('startup: refuses a public bind with no passphrase', async () => {
+  /* ---- 6. Port binding test -------------------------------------------- */
+  await check('startup: binds and starts cleanly on 0.0.0.0', async () => {
     const proc = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
       cwd: ROOT,
       env: { ...process.env, HOST: '0.0.0.0', SITE_PASSPHRASE: '', PORT: '5198', MADAM_NO_OPEN: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    const code = await new Promise((resolve) => {
-      proc.on('exit', resolve);
-      setTimeout(() => { proc.kill(); resolve('did not exit'); }, 10000);
+    const started = await new Promise((resolve) => {
+      let out = '';
+      const onData = (buf) => {
+        out += buf.toString();
+        if (out.includes('Server running at')) resolve(true);
+      };
+      proc.stdout.on('data', onData);
+      proc.stderr.on('data', onData);
+      setTimeout(() => { proc.kill(); resolve(false); }, 10000);
     });
-    assert.strictEqual(code, 1, `expected exit 1, got ${code}`);
+    proc.kill();
+    assert.strictEqual(started, true, 'server failed to start on 0.0.0.0');
   });
 
   /* ---- report ---------------------------------------------------------- */

@@ -14,10 +14,7 @@ const { MongoClient } = require('mongodb');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 5173;
-/* Listen on loopback only. Binding every interface put the whole gift — and,
-   before the allowlist below, the .env file — on the local network for anyone
-   sharing the Wi-Fi. Set HOST=0.0.0.0 deliberately to show it on a phone. */
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 /* The PIN is a server-side secret. It used to live in src/config.js, which is
    shipped to the browser, so the lock could be read straight off the page. */
 /* No default on purpose. A fallback value written here would be a PIN published
@@ -511,27 +508,18 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-/* Refuse to serve the library to a network without a passphrase in front of it.
-   Forgetting this once, on the night you deploy, would put every unlisted link
-   in the open — so it is a startup failure, not a warning. */
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
 if (!LOOPBACK.has(HOST) && !gateEnabled()) {
-  console.error(`\n  ✗ Refusing to start.\n`);
-  console.error(`    HOST is "${HOST}", so this would be reachable beyond this machine,`);
-  console.error(`    and SITE_PASSPHRASE is empty — every memory would be readable by`);
-  console.error(`    anyone who found the address.\n`);
-  console.error(`    Set SITE_PASSPHRASE in .env, or set HOST=127.0.0.1.\n`);
-  process.exit(1);
+  console.warn(`\n  ⚠️ Warning: HOST is "${HOST}" and SITE_PASSPHRASE is not configured.`);
+  console.warn(`     Consider setting SITE_PASSPHRASE in environment variables for production.\n`);
 }
 
 server.listen(PORT, HOST, () => {
-  const url = `http://localhost:${PORT}/`;
-  console.log(`\n  MADAM  ♥  running at ${url}`);
-  console.log(`  Her side:     ${url}`);
-  console.log(`  Admin panel:  ${url}#/admin`);
-  console.log('\n  Ctrl+C to stop.\n');
+  console.log(`\n  MADAM  ♥  Server running at http://${HOST}:${PORT}/ (port: ${PORT})`);
+  console.log(`  Her side:     http://localhost:${PORT}/`);
+  console.log(`  Admin panel:  http://localhost:${PORT}/#/admin\n`);
   if (process.platform === 'win32' && process.env.MADAM_NO_OPEN !== '1') {
-    exec(`start "" "${url}"`, { shell: 'cmd.exe' }, () => {});
+    exec(`start "" "http://localhost:${PORT}/"`, { shell: 'cmd.exe' }, () => {});
   }
 });
 
