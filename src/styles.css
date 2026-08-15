@@ -982,11 +982,18 @@ img { display: block; }
 }
 /* Holds the letter readable over the photographs. Without this the words
    fight the images for contrast and the letter loses. */
+/* ONE layer only. Two stacked gradients multiply, and the photographs behind
+   them disappear. Darkest down the centre column where the words sit, opening
+   up towards the edges so the wall is actually visible. */
 #letter-bg-scrim {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.62) 55%, rgba(0, 0, 0, 0.74) 100%),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.55) 40%, rgba(0, 0, 0, 0.78));
+    linear-gradient(to right,
+      rgba(0, 0, 0, 0.15) 0%,
+      rgba(0, 0, 0, 0.52) 22%,
+      rgba(0, 0, 0, 0.58) 50%,
+      rgba(0, 0, 0, 0.52) 78%,
+      rgba(0, 0, 0, 0.15) 100%);
 }
 /* the words themselves get a soft halo so they never sit flat on a photo */
 .letter-para, .letter-heading-para {
@@ -1119,10 +1126,11 @@ img { display: block; }
   --dw-tile-h: 132px;
   --dw-gap: 18px;
   --dw-radius: 14px;
-  --dw-dim: 0.32;
+  --dw-dim: 0.9;
+  --dw-tint: 0.12;
   --dw-gray: 0;
   --dw-overlay: #060010;
-  --dw-edge: 40%;
+  --dw-edge: 75%;
   -webkit-mask-image:
     radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
     linear-gradient(to top, #000 var(--dw-edge), transparent 100%);
@@ -1179,7 +1187,7 @@ img { display: block; }
 .drift-wall__overlay {
   position: absolute; inset: 0;
   background: var(--dw-overlay);
-  opacity: 0.42;
+  opacity: var(--dw-tint, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -332,7 +332,16 @@ export function letterScreen(nav) {
       fetchGallery().then((photos) => {
         if (!running) return;
         const urls = photos.map((p) => p.url).filter(Boolean);
-        wall = driftWall(urls.length ? urls : LETTER_GALLERY_PLACEHOLDERS);
+        /* Tune the look here. dim = how bright the photos are, tint = the
+           colour wash over them, fade = how far the edges dissolve, speed =
+           drift rate in pixels per second. */
+        wall = driftWall(urls.length ? urls : LETTER_GALLERY_PLACEHOLDERS, {
+          columns: 7,
+          speed: 34,
+          dim: 0.9,
+          tint: 0.12,
+          fade: 0.25,
+        });
         if (wall) bgHost.appendChild(wall.el);
       });
 

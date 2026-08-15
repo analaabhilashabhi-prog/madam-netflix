@@ -31,7 +31,7 @@ const check = (name, fn) =>
   const photos = (n) => Array.from({ length: n }, (_, i) => `https://example.com/${i}.jpg`);
 
   await check('the tile size variables actually reach the element', () => {
-    const wall = driftWall(photos(12));
+    const wall = driftWall(photos(12), { columns: 5 });
     const s = wall.el.style;
     // the exact bug: these were silently empty
     assert.strictEqual(s.getPropertyValue('--dw-tile-w'), '200px');
@@ -42,7 +42,7 @@ const check = (name, fn) =>
   });
 
   await check('it builds columns and tiles', () => {
-    const wall = driftWall(photos(12));
+    const wall = driftWall(photos(12), { columns: 5 });
     const cols = wall.el.querySelectorAll('.drift-wall__col');
     const tiles = wall.el.querySelectorAll('.drift-wall__tile');
     const imgs = wall.el.querySelectorAll('img');
@@ -54,7 +54,7 @@ const check = (name, fn) =>
 
   await check('every column is filled, whatever the photo count', () => {
     for (const n of [1, 3, 9, 10, 43, 120]) {
-      const wall = driftWall(photos(n));
+      const wall = driftWall(photos(n), { columns: 5 });
       const tracks = wall.el.querySelectorAll('.drift-wall__track');
       assert.strictEqual(tracks.length, 5, `${n} photos: expected 5 tracks`);
       tracks.forEach((t, i) => {
@@ -66,7 +66,7 @@ const check = (name, fn) =>
   });
 
   await check('fewer than ten photos are repeated, not dropped', () => {
-    const wall = driftWall(photos(3));
+    const wall = driftWall(photos(3), { columns: 5 });
     const srcs = [...wall.el.querySelectorAll('img')].map((i) => i.getAttribute('src'));
     const unique = new Set(srcs);
     assert.strictEqual(unique.size, 3, 'the three originals should all appear');
@@ -81,7 +81,7 @@ const check = (name, fn) =>
   });
 
   await check('it can never steal a click from the letter', () => {
-    const wall = driftWall(photos(12));
+    const wall = driftWall(photos(12), { columns: 5 });
     assert.strictEqual(wall.el.getAttribute('aria-hidden'), 'true');
     // pointer-events is in the stylesheet, so assert nothing interactive exists
     assert.strictEqual(wall.el.querySelectorAll('a, button, [tabindex]').length, 0);
@@ -89,7 +89,7 @@ const check = (name, fn) =>
   });
 
   await check('the plane is actually tilted in 3D', () => {
-    const wall = driftWall(photos(12));
+    const wall = driftWall(photos(12), { columns: 5 });
     const t = wall.el.querySelector('.drift-wall__plane').style.transform;
     assert.ok(/rotateX\(16deg\)/.test(t), `missing pitch: ${t}`);
     assert.ok(/rotateY\(-14deg\)/.test(t), `missing yaw: ${t}`);
@@ -100,7 +100,7 @@ const check = (name, fn) =>
   await check('destroy removes it and stops the loop', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
-    const wall = driftWall(photos(12));
+    const wall = driftWall(photos(12), { columns: 5 });
     host.appendChild(wall.el);
     assert.strictEqual(host.children.length, 1);
     wall.destroy();

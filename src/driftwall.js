@@ -47,7 +47,7 @@ export function driftWall(photoUrls, options = {}) {
   if (!urls.length) return null;
 
   const {
-    columns = 5,
+    columns = 7, // wide enough to reach both edges of a laptop screen
     tileWidth = 200,
     tileHeight = 132,
     gap = 18,
@@ -60,8 +60,9 @@ export function driftWall(photoUrls, options = {}) {
     speed = 42,
     direction = 'up',
     variance = 0.45,
-    fade = 0.6,
-    dim = 0.32,
+    fade = 0.25, // how far the edges dissolve; higher hides more of the wall
+    dim = 0.9, // resting opacity of a tile
+    tint = 0.12, // strength of the colour wash over each tile
     grayscale = false,
     overlayColor = '#060010',
     minimumTiles = 10,
@@ -85,6 +86,7 @@ export function driftWall(photoUrls, options = {}) {
     '--dw-radius': `${radius}px`,
     '--dw-perspective': `${perspective}px`,
     '--dw-dim': String(dim),
+    '--dw-tint': String(tint),
     '--dw-gray': grayscale ? '1' : '0',
     '--dw-overlay': overlayColor,
     '--dw-edge': `${Math.max(0, (1 - fade) * 100)}%`,
