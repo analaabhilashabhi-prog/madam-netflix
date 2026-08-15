@@ -226,8 +226,10 @@ export function letterScreen(nav) {
       startLetterBgm();
 
       const enableAudioOnGesture = () => unlockAudio();
+      window.addEventListener('pointerdown', enableAudioOnGesture, { once: true });
       window.addEventListener('click', enableAudioOnGesture, { once: true });
       window.addEventListener('touchstart', enableAudioOnGesture, { once: true });
+      window.addEventListener('wheel', enableAudioOnGesture, { once: true });
       el.addEventListener('scroll', enableAudioOnGesture, { once: true });
 
       requestAnimationFrame(() => {

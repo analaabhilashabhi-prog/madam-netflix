@@ -1,106 +1,58 @@
 /* Background music manager for Madam Netflix.
-   Uses direct HTML5 Audio (assets/music/letter-bgm.mp3) for instant,
-   seamless unmuted audio playback on user click/scroll, with YouTube iframe
-   as fallback. */
+   Instant HTML5 Audio preloading and continuous playback. */
 
 import { LETTER_BGM } from './config.js';
-import { createPlayer, loadYouTubeAPI } from './yt.js';
 
 let audioElement = null;
-let bgmPlayer = null;
-let bgmContainer = null;
-let bgmHost = null;
 let isPlaying = false;
-let updateCallback = null;
 
-// Preload HTML5 audio element
+// Pre-create and preload audio element as soon as app loads
 function getAudioElement() {
   if (!audioElement) {
     audioElement = new Audio();
     audioElement.src = LETTER_BGM.src || 'assets/music/letter-bgm.mp3';
+    audioElement.preload = 'auto';
     audioElement.loop = true;
-    audioElement.volume = (LETTER_BGM.volume || 80) / 100;
+    audioElement.volume = (LETTER_BGM.volume || 85) / 100;
+    try { audioElement.load(); } catch (_) {}
   }
   return audioElement;
 }
 
-export function startLetterBgm(onUpdate) {
-  if (onUpdate) updateCallback = onUpdate;
+// Start preloading immediately when script loads
+if (typeof window !== 'undefined') {
+  try { getAudioElement(); } catch (_) {}
+}
 
+export function startLetterBgm() {
   const audio = getAudioElement();
-  audio.volume = (LETTER_BGM.volume || 80) / 100;
-  
+  audio.volume = (LETTER_BGM.volume || 85) / 100;
+  audio.muted = false;
+
   const playPromise = audio.play();
   if (playPromise !== undefined) {
     playPromise.then(() => {
       isPlaying = true;
-      updateCallback?.(true);
-    }).catch(() => {
-      // If browser blocked initial autoplay without gesture, unlock on first touch
+    }).catch((err) => {
+      console.warn('[madam] BGM initial play deferred until user touch:', err.message);
       isPlaying = false;
-      updateCallback?.(false);
-      startYouTubeFallback();
     });
   }
 }
 
 export function unlockAudio() {
   const audio = getAudioElement();
+  audio.muted = false;
+  audio.volume = (LETTER_BGM.volume || 85) / 100;
+  
   if (audio.paused) {
     audio.play().then(() => {
       isPlaying = true;
-      updateCallback?.(true);
-    }).catch(() => {
-      startYouTubeFallback();
+    }).catch((err) => {
+      console.warn('[madam] BGM play unlock failed:', err.message);
     });
   } else {
     isPlaying = true;
-    updateCallback?.(true);
-  }
-}
-
-async function startYouTubeFallback() {
-  if (bgmPlayer) return;
-  if (!LETTER_BGM || !LETTER_BGM.videoId) return;
-
-  if (!bgmContainer || !document.body.contains(bgmContainer)) {
-    bgmContainer = document.createElement('div');
-    bgmContainer.id = 'bgm-container';
-    bgmContainer.style.cssText = 'position:fixed; width:1px; height:1px; opacity:0.001; pointer-events:none; z-index:-1; left:-9999px; top:-9999px;';
-    bgmHost = document.createElement('div');
-    bgmContainer.appendChild(bgmHost);
-    document.body.appendChild(bgmContainer);
-  }
-
-  try {
-    bgmPlayer = await createPlayer(bgmHost, {
-      videoId: LETTER_BGM.videoId,
-      start: LETTER_BGM.start || 0,
-      loop: true,
-      muted: false,
-    });
-    if (bgmPlayer) {
-      bgmPlayer.seek(LETTER_BGM.start || 0);
-      bgmPlayer.volume(LETTER_BGM.volume || 80);
-      bgmPlayer.unMute();
-      bgmPlayer.play();
-      isPlaying = true;
-      updateCallback?.(true);
-    }
-  } catch (_) {}
-}
-
-export function toggleLetterBgm() {
-  const audio = getAudioElement();
-  if (isPlaying) {
-    audio.pause();
-    if (bgmPlayer) try { bgmPlayer.pause(); } catch (_) {}
-    isPlaying = false;
-    updateCallback?.(false);
-    return false;
-  } else {
-    unlockAudio();
-    return true;
   }
 }
 
@@ -111,20 +63,7 @@ export function stopLetterBgm() {
       audioElement.currentTime = 0;
     } catch (_) {}
   }
-  if (bgmPlayer) {
-    try {
-      bgmPlayer.pause();
-      bgmPlayer.destroy();
-    } catch (_) {}
-    bgmPlayer = null;
-  }
   isPlaying = false;
-  updateCallback?.(false);
-}
-
-export function setBgmCallback(fn) {
-  updateCallback = fn;
-  if (updateCallback) updateCallback(isPlaying);
 }
 
 export function isLetterBgmPlaying() {
