@@ -214,7 +214,10 @@ export function letterScreen(nav) {
   }
 
   const onScroll = () => {
-    if (running) loop();
+    if (running) {
+      unlockAudio();
+      loop();
+    }
   };
 
   return {
@@ -226,11 +229,12 @@ export function letterScreen(nav) {
       startLetterBgm();
 
       const enableAudioOnGesture = () => unlockAudio();
-      window.addEventListener('pointerdown', enableAudioOnGesture, { once: true });
-      window.addEventListener('click', enableAudioOnGesture, { once: true });
-      window.addEventListener('touchstart', enableAudioOnGesture, { once: true });
-      window.addEventListener('wheel', enableAudioOnGesture, { once: true });
-      el.addEventListener('scroll', enableAudioOnGesture, { once: true });
+      window.addEventListener('pointerdown', enableAudioOnGesture);
+      window.addEventListener('click', enableAudioOnGesture);
+      window.addEventListener('touchstart', enableAudioOnGesture);
+      window.addEventListener('wheel', enableAudioOnGesture);
+      window.addEventListener('keydown', enableAudioOnGesture);
+      el.addEventListener('scroll', enableAudioOnGesture);
 
       requestAnimationFrame(() => {
         measure();

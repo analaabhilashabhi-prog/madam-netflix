@@ -490,13 +490,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  fs.readFile(filePath, (readErr, data) => {
-    if (readErr) {
+  fs.stat(filePath, (statErr, stats) => {
+    if (statErr || !stats.isFile()) {
       res.writeHead(404, { 'Content-Type': 'text/plain', 'X-Content-Type-Options': 'nosniff' }).end('Not found');
       return;
     }
-    res.writeHead(200, {
-      'Content-Type': TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+
+    const contentType = TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+    const totalSize = stats.size;
+    const rangeHeader = req.headers.range;
+
+    const baseHeaders = {
+      'Content-Type': contentType,
+      'Accept-Ranges': 'bytes',
       'Cache-Control': 'no-store, must-revalidate',
       Pragma: 'no-cache',
       Expires: '0',
@@ -504,7 +510,38 @@ const server = http.createServer(async (req, res) => {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-    }).end(data);
+    };
+
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10) || 0;
+      const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+      const chunkSize = (end - start) + 1;
+
+      if (start >= totalSize || end >= totalSize) {
+        res.writeHead(416, {
+          'Content-Range': `bytes */${totalSize}`,
+          'Content-Type': 'text/plain',
+        }).end('Requested Range Not Satisfiable');
+        return;
+      }
+
+      res.writeHead(206, {
+        ...baseHeaders,
+        'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+        'Content-Length': chunkSize,
+      });
+
+      const stream = fs.createReadStream(filePath, { start, end });
+      stream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        ...baseHeaders,
+        'Content-Length': totalSize,
+      });
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    }
   });
 });
 

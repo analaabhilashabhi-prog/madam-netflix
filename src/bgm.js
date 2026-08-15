@@ -7,12 +7,29 @@ let audioElement = null;
 let isPlaying = false;
 
 // Pre-create and preload audio element as soon as app loads
-function getAudioElement() {
+export function getAudioElement() {
   if (!audioElement) {
-    audioElement = new Audio();
-    audioElement.src = LETTER_BGM.src || 'assets/music/letter-bgm.mp3';
-    audioElement.preload = 'auto';
-    audioElement.loop = true;
+    if (typeof document !== 'undefined') {
+      let el = document.getElementById('madam-letter-audio');
+      if (!el) {
+        el = document.createElement('audio');
+        el.id = 'madam-letter-audio';
+        el.src = LETTER_BGM.src || 'assets/music/letter-bgm.mp3';
+        el.preload = 'auto';
+        el.loop = true;
+        el.setAttribute('playsinline', '');
+        el.setAttribute('webkit-playsinline', '');
+        el.style.display = 'none';
+        if (document.body) {
+          document.body.appendChild(el);
+        } else {
+          document.addEventListener('DOMContentLoaded', () => document.body.appendChild(el));
+        }
+      }
+      audioElement = el;
+    } else {
+      audioElement = new Audio(LETTER_BGM.src || 'assets/music/letter-bgm.mp3');
+    }
     audioElement.volume = (LETTER_BGM.volume || 85) / 100;
     try { audioElement.load(); } catch (_) {}
   }
@@ -26,6 +43,7 @@ if (typeof window !== 'undefined') {
 
 export function startLetterBgm() {
   const audio = getAudioElement();
+  if (!audio) return;
   audio.volume = (LETTER_BGM.volume || 85) / 100;
   audio.muted = false;
 
@@ -34,7 +52,7 @@ export function startLetterBgm() {
     playPromise.then(() => {
       isPlaying = true;
     }).catch((err) => {
-      console.warn('[madam] BGM initial play deferred until user touch:', err.message);
+      console.warn('[madam] BGM autoplay deferred until user interaction:', err.message);
       isPlaying = false;
     });
   }
@@ -42,15 +60,14 @@ export function startLetterBgm() {
 
 export function unlockAudio() {
   const audio = getAudioElement();
+  if (!audio) return;
   audio.muted = false;
   audio.volume = (LETTER_BGM.volume || 85) / 100;
   
   if (audio.paused) {
     audio.play().then(() => {
       isPlaying = true;
-    }).catch((err) => {
-      console.warn('[madam] BGM play unlock failed:', err.message);
-    });
+    }).catch(() => {});
   } else {
     isPlaying = true;
   }
@@ -68,6 +85,7 @@ export function stopLetterBgm() {
 
 export function toggleLetterBgm() {
   const audio = getAudioElement();
+  if (!audio) return;
   if (isPlaying) {
     audio.pause();
     isPlaying = false;
