@@ -179,6 +179,35 @@ const check = (name, fn) =>
     }
   });
 
+  /* The letter shipped completely invisible because a "written" word was given
+     el.style.opacity = '', which removes the inline value and drops the word
+     back to a stylesheet rule that hides it. */
+  await check('a written word is never handed back to the stylesheet', () => {
+    const d = new JSDOM('<!doctype html><style>.letter-w{opacity:1}#letter-root.ink .letter-w{opacity:0}</style>'
+      + '<div id="letter-root" class="ink"><span class="letter-w">word</span></div>');
+    const el = d.window.document.querySelector('.letter-w');
+    const root = d.window.document.getElementById('letter-root');
+    const computed = () => d.window.getComputedStyle(el).opacity;
+
+    el.style.opacity = '';
+    assert.strictEqual(computed(), '0', 'clearing the inline value must hide it — this is the trap');
+    el.style.opacity = '1';
+    assert.strictEqual(computed(), '1', 'an explicit 1 must win over the hiding rule');
+
+    // and if the writing pass never runs at all, the letter must stay readable
+    el.style.opacity = '';
+    root.classList.remove('ink');
+    assert.strictEqual(computed(), '1', 'without .ink the words must be visible');
+  });
+
+  await check('the letter source applies opacity explicitly', () => {
+    const src = require('fs').readFileSync(new URL('../src/screens/letter.js', 'file://' + __filename.replace(/\\/g, '/')), 'utf8');
+    assert.ok(
+      !/style\.opacity\s*=\s*(''|""|`\`)/.test(src),
+      'letter.js must never clear style.opacity — set an explicit value'
+    );
+  });
+
   await check('no photos means no wall at all', () => {
     assert.strictEqual(driftWall([]), null);
     assert.strictEqual(driftWall(null), null);

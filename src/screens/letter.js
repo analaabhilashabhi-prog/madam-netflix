@@ -278,6 +278,14 @@ export function letterScreen(nav) {
     const translateY = progress * minTranslate;
     textWrap.style.transform = `translateY(${translateY.toFixed(2)}px)`;
 
+    /* If measuring produced nothing there is no writing to drive, so hand the
+       letter back to the stylesheet and let her read it plainly. */
+    if (!paras.length) {
+      el.classList.remove('ink');
+      return;
+    }
+    el.classList.add('ink');
+
     const anchorY = window.innerHeight * anchorFrac;
     let pen = null;
 
@@ -313,7 +321,11 @@ export function letterScreen(nav) {
 
         const el = word.span;
         if (el._o !== opacity) {
-          el.style.opacity = opacity === 1 ? '' : String(opacity);
+          /* Always an explicit value. Assigning '' REMOVES the inline style,
+             which drops the word back to the stylesheet — and the stylesheet
+             hides unwritten words, so every finished word was being reset to
+             invisible. */
+          el.style.opacity = String(opacity);
           el._o = opacity;
         }
         /* Only the word under the nib is clipped. Everything else is either

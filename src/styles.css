@@ -1067,11 +1067,16 @@ img { display: block; }
    No will-change here on purpose. There are around two thousand of these, and
    hinting every one of them asks the browser to promote two thousand layers,
    which costs far more than it saves and is felt as scroll stutter. */
+/* Visible by default. The words are hidden only once the script has taken
+   charge of them and added .ink to the root — so if the writing pass ever
+   fails to run, she gets a readable letter rather than an empty screen.
+   The script sets an explicit inline opacity per word, which wins over both. */
 .letter-w {
   display: inline-block;
-  opacity: 0; /* ink has not reached this word yet */
+  opacity: 1;
   filter: none;
 }
+#letter-root.ink .letter-w { opacity: 0; }
 
 /* The lines that carry weight. Cookie has one weight only, so asking for bold
    makes the browser synthesise it and the joined strokes smear. Emphasis comes
