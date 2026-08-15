@@ -121,7 +121,10 @@ export function driftWall(photoUrls, options = {}) {
     /* Pinterest-style: how tall a tile may get relative to its width, so a
        freak panorama or a very long portrait cannot dominate a column. */
     minAspect = 0.5, // widest allowed: 2:1 landscape
-    maxAspect = 1.9, // tallest allowed: roughly 1:1.9 portrait
+    /* Tall enough for a modern phone screenshot, which is about 1:2.23. At
+       1.9 every one of those was clamped to an identical height, which put
+       the uniform-grid look straight back. */
+    maxAspect = 2.3,
     measureTimeout = 5000,
     className = '',
   } = options;

@@ -99,8 +99,12 @@ const check = (name, fn) =>
     // a 1:6 sliver and a 6:1 banner
     const wall = await make(shaped(['200x1200', '1200x200']), { columns: 2, minimumTiles: 2 });
     const heights = [...wall.el.querySelectorAll('.drift-wall__tile')].map((t) => parseInt(t.style.height, 10) - 18);
+    // round the bounds the same way the code does: 200 * 2.3 is 459.99999999999994
     for (const h of heights) {
-      assert.ok(h >= 200 * 0.5 && h <= 200 * 1.9, `height ${h} is outside the clamp`);
+      assert.ok(
+        h >= Math.round(200 * 0.5) && h <= Math.round(200 * 2.3),
+        `height ${h} is outside the clamp`
+      );
     }
     wall.destroy();
   });
