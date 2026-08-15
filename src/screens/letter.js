@@ -96,39 +96,6 @@ export function letterScreen(nav) {
     </div>
   `;
 
-  /* ---- Background Music (BGM) UI ---- */
-  const bgmControl = document.createElement('div');
-  bgmControl.id = 'letter-bgm-control';
-  bgmControl.className = 'letter-bgm-control';
-  bgmControl.innerHTML = `
-    <button id="letter-bgm-btn" title="Toggle background music" class="letter-bgm-btn">
-      <span class="letter-bgm-icon">🎵</span>
-      <span class="letter-bgm-text">Music Playing</span>
-    </button>
-  `;
-
-  const bgmBtn = bgmControl.querySelector('#letter-bgm-btn');
-  const bgmText = bgmControl.querySelector('.letter-bgm-text');
-  const bgmIcon = bgmControl.querySelector('.letter-bgm-icon');
-
-  const updateBgmUI = (isPlaying) => {
-    if (!bgmBtn) return;
-    if (isPlaying) {
-      bgmText.textContent = 'Music Playing';
-      bgmIcon.textContent = '🎵';
-      bgmControl.classList.remove('muted');
-    } else {
-      bgmText.textContent = 'Music Paused';
-      bgmIcon.textContent = '🔇';
-      bgmControl.classList.add('muted');
-    }
-  };
-
-  bgmBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleLetterBgm();
-  });
-
   const proceedToBumper = () => {
     stopLetterBgm();
     goFullscreen();
@@ -144,7 +111,6 @@ export function letterScreen(nav) {
   el.appendChild(spacer);
   el.appendChild(endSpace);
   el.appendChild(outroMsg);
-  el.appendChild(bgmControl);
 
   /* ---- Animation state ---- */
   let textHeight = 0;
@@ -256,8 +222,8 @@ export function letterScreen(nav) {
     begin() {
       running = true;
 
-      // Start/sync BGM with UI
-      startLetterBgm(updateBgmUI);
+      // Start BGM automatically
+      startLetterBgm();
 
       const enableAudioOnGesture = () => unlockAudio();
       window.addEventListener('click', enableAudioOnGesture, { once: true });
