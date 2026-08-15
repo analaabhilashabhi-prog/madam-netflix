@@ -7,6 +7,11 @@ export const BUMPER = {
   maxSeconds: 30,
 };
 
+export const LETTER_BGM = {
+  videoId: 'kWTiVDwe6MA',
+  volume: 80,
+};
+
 /* Section 4.4 — the PIN itself deliberately does NOT live here. This file is
    served to the browser, so anything in it is readable by anyone who opens the
    page. It is checked by the server (SECRET_PIN in .env, POST /api/auth/pin). */

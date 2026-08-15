@@ -4,6 +4,8 @@
    - "Enjoy the ride my Madam Ji ❤️" transition overlay at the end before Netflix intro. */
 
 import { goFullscreen } from '../ui.js';
+import { createPlayer } from '../yt.js';
+import { LETTER_BGM } from '../config.js';
 
 const LETTER = `Before You Enter Our Little World
 
@@ -95,7 +97,71 @@ export function letterScreen(nav) {
     </div>
   `;
 
+  /* ---- Background Music (BGM) ---- */
+  let bgmPlayer = null;
+  let bgmMuted = false;
+  let bgmStarted = false;
+
+  const bgmContainer = document.createElement('div');
+  bgmContainer.style.cssText = 'position:fixed; width:1px; height:1px; opacity:0.001; pointer-events:none; z-index:-1; left:-9999px; top:-9999px;';
+  
+  const bgmHost = document.createElement('div');
+  bgmContainer.appendChild(bgmHost);
+
+  const bgmControl = document.createElement('div');
+  bgmControl.id = 'letter-bgm-control';
+  bgmControl.className = 'letter-bgm-control';
+  bgmControl.innerHTML = `
+    <button id="letter-bgm-btn" title="Toggle background music" class="letter-bgm-btn">
+      <span class="letter-bgm-icon">🎵</span>
+      <span class="letter-bgm-text">Music Playing</span>
+    </button>
+  `;
+
+  const bgmBtn = bgmControl.querySelector('#letter-bgm-btn');
+  const bgmText = bgmControl.querySelector('.letter-bgm-text');
+  const bgmIcon = bgmControl.querySelector('.letter-bgm-icon');
+
+  const updateBgmUI = (isPlaying) => {
+    if (!bgmBtn) return;
+    if (isPlaying) {
+      bgmText.textContent = 'Music Playing';
+      bgmIcon.textContent = '🎵';
+      bgmControl.classList.remove('muted');
+    } else {
+      bgmText.textContent = 'Music Paused';
+      bgmIcon.textContent = '🔇';
+      bgmControl.classList.add('muted');
+    }
+  };
+
+  bgmBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!bgmPlayer) return;
+    if (bgmMuted) {
+      bgmPlayer.unMute();
+      bgmPlayer.play();
+      bgmMuted = false;
+      updateBgmUI(true);
+    } else {
+      bgmPlayer.pause();
+      bgmMuted = true;
+      updateBgmUI(false);
+    }
+  });
+
+  const stopBgm = () => {
+    if (bgmPlayer) {
+      try {
+        bgmPlayer.pause();
+        bgmPlayer.destroy();
+      } catch (_) {}
+      bgmPlayer = null;
+    }
+  };
+
   const proceedToBumper = () => {
+    stopBgm();
     goFullscreen();
     nav.profiles({ withBumper: true });
   };
@@ -109,6 +175,8 @@ export function letterScreen(nav) {
   el.appendChild(spacer);
   el.appendChild(endSpace);
   el.appendChild(outroMsg);
+  el.appendChild(bgmContainer);
+  el.appendChild(bgmControl);
 
   /* ---- Animation state ---- */
   let textHeight = 0;
@@ -217,8 +285,40 @@ export function letterScreen(nav) {
 
   return {
     el,
-    begin() {
+    async begin() {
       running = true;
+
+      // Start BGM
+      if (LETTER_BGM && LETTER_BGM.videoId) {
+        try {
+          bgmPlayer = await createPlayer(bgmHost, {
+            videoId: LETTER_BGM.videoId,
+            loop: true,
+            muted: false,
+          });
+          if (bgmPlayer) {
+            bgmPlayer.volume(LETTER_BGM.volume || 80);
+            bgmPlayer.unMute();
+            bgmPlayer.play();
+            bgmStarted = true;
+            updateBgmUI(true);
+          }
+        } catch (err) {
+          console.warn('[madam] Could not initialize letter BGM:', err);
+        }
+      }
+
+      const enableAudioOnGesture = () => {
+        if (bgmPlayer && (!bgmStarted || bgmPlayer.state() !== 1)) {
+          bgmPlayer.unMute();
+          bgmPlayer.play();
+          bgmStarted = true;
+          updateBgmUI(true);
+        }
+      };
+      window.addEventListener('click', enableAudioOnGesture, { once: true });
+      window.addEventListener('touchstart', enableAudioOnGesture, { once: true });
+      el.addEventListener('scroll', enableAudioOnGesture, { once: true });
 
       requestAnimationFrame(() => {
         measure();
@@ -237,6 +337,7 @@ export function letterScreen(nav) {
     },
     destroy() {
       running = false;
+      stopBgm();
       if (rafId) cancelAnimationFrame(rafId);
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', measure);
