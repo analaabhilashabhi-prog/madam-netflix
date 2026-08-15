@@ -964,14 +964,33 @@ img { display: block; }
 }
 #letter-root::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
-#letter-spacer { position: relative; }
+#letter-spacer { position: relative; z-index: 2; }
 
 #letter-stage {
   position: sticky; top: 0;
   height: 100vh; width: 100vw;
-  background: #000000;
+  /* transparent so the drifting photo wall shows through behind the words */
+  background: transparent;
   display: flex; align-items: flex-start; justify-content: center;
   overflow: hidden;
+}
+
+/* ---------- the photo wall behind the letter --------------------------- */
+#letter-bg {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; /* she is reading, not browsing — it never takes input */
+}
+/* Holds the letter readable over the photographs. Without this the words
+   fight the images for contrast and the letter loses. */
+#letter-bg-scrim {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.62) 55%, rgba(0, 0, 0, 0.74) 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.55) 40%, rgba(0, 0, 0, 0.78));
+}
+/* the words themselves get a soft halo so they never sit flat on a photo */
+.letter-para, .letter-heading-para {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.92), 0 0 42px rgba(0, 0, 0, 0.75);
 }
 
 #letter-text-wrap {
@@ -1020,7 +1039,7 @@ img { display: block; }
 }
 
 #letter-hint {
-  position: fixed; bottom: 24px; left: 50%;
+  position: fixed; bottom: 24px; left: 50%; z-index: 10; /* above the photo wall scrim */
   transform: translateX(-50%);
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 13px; letter-spacing: 0.16em;
@@ -1066,6 +1085,94 @@ img { display: block; }
   .admin-row { grid-template-columns: 1fr; }
   .admin-thumb { width: 100%; }
   .admin-row-actions { grid-template-columns: repeat(4, auto); }
+}
+
+/* ---------- admin: letter background gallery ---------------------------- */
+.gal-form { margin-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 18px; }
+.gal-count { font-size: 12px; margin: 10px 0 8px; line-height: 1.45; }
+.gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.gal-cell {
+  position: relative; aspect-ratio: 3 / 2; border-radius: 8px; overflow: hidden;
+  background: #101018; border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.gal-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gal-del {
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px;
+  display: grid; place-items: center; padding: 0; cursor: pointer;
+  border: 0; border-radius: 6px; background: rgba(0, 0, 0, 0.66);
+  opacity: 0; transition: opacity 160ms var(--ease);
+}
+.gal-cell:hover .gal-del, .gal-del:focus-visible { opacity: 1; }
+.gal-del .icon { width: 15px; height: 15px; fill: #ff6b6b; }
+
+/* ---------- DriftWall (photo wall behind the letter) -------------------- */
+.drift-wall {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  perspective: var(--dw-perspective, 1200px);
+  perspective-origin: 50% 50%;
+  pointer-events: none;
+  -webkit-mask-image:
+    radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
+    linear-gradient(to top, #000 var(--dw-edge), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
+    linear-gradient(to top, #000 var(--dw-edge), transparent 100%);
+  mask-composite: intersect;
+}
+
+.drift-wall__plane {
+  position: absolute; top: 50%; left: 50%;
+  display: flex; flex-direction: row;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.drift-wall__col {
+  position: relative;
+  width: calc(var(--dw-tile-w) + var(--dw-gap));
+  transform-style: preserve-3d;
+}
+
+.drift-wall__track {
+  display: flex; flex-direction: column;
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+.drift-wall__tile {
+  position: relative; display: block; width: 100%;
+  height: calc(var(--dw-tile-h) + var(--dw-gap));
+  flex: 0 0 auto;
+  transform-style: preserve-3d;
+}
+
+.drift-wall__inner {
+  position: absolute; inset: calc(var(--dw-gap) / 2);
+  display: block; overflow: hidden;
+  border-radius: var(--dw-radius);
+  background: #0b0b12;
+  opacity: var(--dw-dim);
+  transform: translateZ(0);
+}
+
+.drift-wall__tile img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  filter: grayscale(var(--dw-gray)) saturate(0.92);
+  user-select: none; -webkit-user-drag: none;
+}
+
+.drift-wall__overlay {
+  position: absolute; inset: 0;
+  background: var(--dw-overlay);
+  opacity: 0.42;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift-wall__plane, .drift-wall__track { will-change: auto; }
 }
 
 /* ---------- letter sound prompt ---------------------------------------- */

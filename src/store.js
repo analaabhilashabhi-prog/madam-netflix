@@ -154,6 +154,27 @@ export async function enterSite(passphrase) {
   }
 }
 
+/* ---------- letter background gallery ---------------------------------- */
+
+export async function fetchGallery() {
+  try {
+    const res = await fetch('/api/gallery', { headers: readHeaders() });
+    if (!res.ok) return [];
+    const { photos } = await res.json();
+    return Array.isArray(photos) ? photos : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export async function addGalleryPhoto(url) {
+  return serverPost('/api/gallery', { url: String(url || '').trim() });
+}
+
+export async function removeGalleryPhoto(id) {
+  return serverDelete(`/api/gallery/${encodeURIComponent(id)}`);
+}
+
 /* Section 4.4 — the PIN is verified server-side; this never sees the real one. */
 export async function unlockSecret(pin) {
   try {

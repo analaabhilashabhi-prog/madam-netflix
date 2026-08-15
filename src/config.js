@@ -14,6 +14,14 @@ export const LETTER_BGM = {
   volume: 80,
 };
 
+/* The photo wall drifting behind the letter. Whatever you add in the Admin
+   Panel replaces this list entirely — these are only placeholders so the wall
+   is visible before you have added anything of your own. Ten is the minimum
+   for it to look full; below that the wall repeats what it has. */
+export const LETTER_GALLERY_PLACEHOLDERS = [
+  1015, 1025, 1039, 1043, 1044, 1050, 1062, 1069, 1074, 1080, 1084, 106, 110, 133, 164,
+].map((id) => `https://picsum.photos/id/${id}/600/400`);
+
 /* Section 4.4 — the PIN itself deliberately does NOT live here. This file is
    served to the browser, so anything in it is readable by anyone who opens the
    page. It is checked by the server (SECRET_PIN in .env, POST /api/auth/pin). */

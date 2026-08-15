@@ -179,6 +179,33 @@ function startServer(env) {
     assert.strictEqual(res.status, 401);
   });
 
+  /* ---- 3b. The letter gallery is behind the same doors ----------------- */
+  await check('gallery: refused without the passphrase', async () => {
+    const res = await get('/api/gallery');
+    assert.strictEqual(res.status, 401, `expected 401, got ${res.status}`);
+  });
+
+  await check('gallery: anonymous cannot add or remove photos', async () => {
+    const add = await post('/api/gallery', { url: 'https://example.com/x.jpg' });
+    assert.strictEqual(add.status, 401);
+    const del = await fetch(`${BASE}/api/gallery/anything`, { method: 'DELETE' });
+    assert.strictEqual(del.status, 401);
+  });
+
+  await check('gallery: a site token cannot add photos', async () => {
+    const res = await post('/api/gallery', { url: 'https://example.com/x.jpg' }, {
+      Authorization: `Bearer ${siteToken}`,
+    });
+    assert.strictEqual(res.status, 401, 'site token was accepted as admin!');
+  });
+
+  await check('gallery: readable once the passphrase is given', async () => {
+    const res = await get('/api/gallery', { 'X-Madam-Site': siteToken });
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body.photos), 'photos should be an array');
+  });
+
   /* ---- 4. Tokens cannot be traded up ----------------------------------- */
   await check('tokens: a site token cannot write', async () => {
     const res = await post('/api/content', { id: '__test__', title: 'x' }, {

@@ -3,7 +3,7 @@
    that was already posted. */
 
 import { enabledProfiles, profileById, US_SECTIONS } from '../config.js';
-import { addContent, updateContent, removeContent, moveContent, itemsFor, parseLink, posterFor, posterFallbacks, resetToSeed, getSections, addCustomSection, getItemSection, pushLocalToCloud } from '../store.js';
+import { addContent, updateContent, removeContent, moveContent, itemsFor, parseLink, posterFor, posterFallbacks, resetToSeed, getSections, addCustomSection, getItemSection, pushLocalToCloud, fetchGallery, addGalleryPhoto, removeGalleryPhoto } from '../store.js';
 import { h, icon, toast } from '../ui.js';
 
 const SESSION = 'madam.admin.session';
@@ -240,9 +240,79 @@ export function adminScreen(nav) {
       );
     }
 
+    /* ---------- letter background gallery ------------------------------ */
+    const galleryGrid = h('div', { class: 'gal-grid' });
+    const galleryCount = h('div', { class: 'gal-count dim' });
+    const galleryInput = h('input', { class: 'adm-input', placeholder: 'Photo link (https://…)' });
+    let galleryPhotos = [];
+
+    function paintGallery() {
+      const n = galleryPhotos.length;
+      galleryCount.replaceChildren(
+        n === 0
+          ? 'Nothing added yet — placeholder photos are drifting behind her letter right now.'
+          : n < 10
+          ? `${n} photo${n === 1 ? '' : 's'}. The wall repeats them until there are 10.`
+          : `${n} photos drifting behind the letter.`
+      );
+      galleryGrid.replaceChildren(
+        ...galleryPhotos.map((p) =>
+          h('div', { class: 'gal-cell' },
+            h('img', { src: p.url, alt: '', loading: 'lazy' }),
+            h('button', {
+              class: 'gal-del', title: 'Remove', type: 'button',
+              onClick: async () => {
+                try {
+                  await removeGalleryPhoto(p.id);
+                  galleryPhotos = galleryPhotos.filter((x) => x.id !== p.id);
+                  paintGallery();
+                  toast('Removed from the letter wall');
+                } catch (err) {
+                  toast(`❌ ${err.message}`);
+                }
+              },
+            }, icon('trash')))
+        )
+      );
+    }
+
+    async function loadGallery() {
+      galleryPhotos = await fetchGallery();
+      paintGallery();
+    }
+
+    const galleryForm = h('form', { class: 'admin-form gal-form', onSubmit: async (e) => {
+        e.preventDefault();
+        const url = galleryInput.value.trim();
+        if (!url) return toast('Paste a photo link first');
+        try {
+          const res = await addGalleryPhoto(url);
+          if (res?.photo) {
+            galleryPhotos.push(res.photo);
+            galleryInput.value = '';
+            paintGallery();
+            toast('Added to the letter wall');
+          } else {
+            toast(`❌ ${res?.error || 'Could not add that link'}`);
+          }
+        } catch (err) {
+          toast(`❌ ${err.message}`);
+        }
+      } },
+      h('h3', {}, 'Letter background wall'),
+      h('p', { class: 'dim', style: { fontSize: '12px', margin: '0 0 6px' } },
+        'Photos that drift behind the letter while she reads. Needs 10 or more to look full; after that add as many as you like.'),
+      galleryInput,
+      h('button', { class: 'btn-red', type: 'submit' }, icon('plus'), 'Add photo'),
+      galleryCount,
+      galleryGrid
+    );
+
     paintTabs();
     paintSectionBar();
     paintList();
+    paintGallery();
+    loadGallery();
 
     el.replaceChildren(
       h('header', { class: 'admin-head' },
@@ -254,7 +324,7 @@ export function adminScreen(nav) {
           h('button', { class: 'btn-ghost small', onClick: () => { if (confirm('Reset all content back to the seed/test list?')) { resetToSeed(); paintTabs(); paintList(); toast('Reset to seed content'); } } }, 'Reset to seed'),
           h('button', { class: 'btn-ghost small', onClick: () => { sessionStorage.removeItem(SESSION); renderLogin(); } }, 'Sign out'))),
       h('div', { class: 'admin-body' },
-        h('div', { class: 'admin-side' }, h('h3', {}, 'Post into'), profileTabs, form),
+        h('div', { class: 'admin-side' }, h('h3', {}, 'Post into'), profileTabs, form, galleryForm),
         listHost)
     );
   }

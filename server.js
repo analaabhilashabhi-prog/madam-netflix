@@ -201,6 +201,18 @@ function pickContentFields(obj) {
   return out;
 }
 
+/* Gallery links are rendered straight into <img src>. Only https is accepted:
+   it rules out javascript:/data: entirely, and the page's own CSP allows
+   images from https only, so an http link would silently never render. */
+function isSafeImageUrl(value) {
+  if (!value || value.length > 2048) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
 function parseBody(req) {
   return new Promise((resolve) => {
     let body = '';
@@ -437,6 +449,41 @@ const server = http.createServer(async (req, res) => {
       if (db && itemId) {
         await db.collection('content').deleteOne({ id: String(itemId) });
       }
+      return sendJson(res, 200, { success: true });
+    }
+
+    /* The photo wall that drifts behind the letter. */
+    if (urlPath === '/api/gallery' && method === 'GET') {
+      if (!hasSiteAccess(req)) return sendJson(res, 401, { error: 'Locked' });
+      if (!db) return sendJson(res, 200, { photos: [] });
+      const photos = await db.collection('gallery')
+        .find({}, { projection: { _id: 0 } })
+        .sort({ order: 1, addedAt: 1 })
+        .limit(300) // Rule 30 — bounded
+        .toArray();
+      return sendJson(res, 200, { photos });
+    }
+
+    if (urlPath === '/api/gallery' && method === 'POST') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { success: false, error: 'Unauthorized' });
+      }
+      const { url } = await parseBody(req);
+      const clean = String(url || '').trim();
+      if (!isSafeImageUrl(clean)) {
+        return sendJson(res, 400, { success: false, error: 'Needs to be an https:// image link' });
+      }
+      const photo = { id: crypto.randomUUID(), url: clean, addedAt: Date.now(), order: Date.now() };
+      if (db) await db.collection('gallery').insertOne({ ...photo });
+      return sendJson(res, 200, { success: true, photo });
+    }
+
+    if (urlPath.startsWith('/api/gallery/') && method === 'DELETE') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { success: false, error: 'Unauthorized' });
+      }
+      const photoId = decodeURIComponent(urlPath.replace('/api/gallery/', ''));
+      if (db && photoId) await db.collection('gallery').deleteOne({ id: String(photoId) });
       return sendJson(res, 200, { success: true });
     }
 

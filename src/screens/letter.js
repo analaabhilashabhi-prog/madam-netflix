@@ -5,6 +5,9 @@
 
 import { goFullscreen } from '../ui.js';
 import { startLetterBgm, unlockAudio, toggleLetterBgm, stopLetterBgm } from '../bgm.js';
+import { driftWall } from '../driftwall.js';
+import { fetchGallery } from '../store.js';
+import { LETTER_GALLERY_PLACEHOLDERS } from '../config.js';
 
 /* Emphasis is carried by **bold**, never by punctuation or list markers. */
 const LETTER = `Before You Enter Our Little World
@@ -151,8 +154,17 @@ export function letterScreen(nav) {
 
   outroMsg.addEventListener('click', proceedToBumper);
 
+  /* The drifting photo wall lives here, behind everything, with a scrim over
+     it so the letter stays the thing you actually read. */
+  const bgHost = document.createElement('div');
+  bgHost.id = 'letter-bg';
+  const bgScrim = document.createElement('div');
+  bgScrim.id = 'letter-bg-scrim';
+
   const el = document.createElement('div');
   el.id = 'letter-root';
+  el.appendChild(bgHost);
+  el.appendChild(bgScrim);
   el.appendChild(progressBar);
   el.appendChild(hint);
   el.appendChild(spacer);
@@ -269,6 +281,7 @@ export function letterScreen(nav) {
 
   const GESTURES = ['pointerdown', 'click', 'touchend', 'keydown'];
   const enableAudioOnGesture = () => unlockAudio();
+  let wall = null;
 
   /* The one tap the browser needs before it will let the music be heard.
      Only ever shown when playback was actually refused. */
@@ -314,6 +327,15 @@ export function letterScreen(nav) {
         if (!playing && running) showSoundPrompt();
       });
 
+      /* Whatever is in the Admin Panel wins; the placeholders only fill in
+         until there is something of your own to show. */
+      fetchGallery().then((photos) => {
+        if (!running) return;
+        const urls = photos.map((p) => p.url).filter(Boolean);
+        wall = driftWall(urls.length ? urls : LETTER_GALLERY_PLACEHOLDERS);
+        if (wall) bgHost.appendChild(wall.el);
+      });
+
       /* Real activation events only — wheel/scroll can never unlock audio. */
       for (const ev of GESTURES) window.addEventListener(ev, enableAudioOnGesture);
 
@@ -334,6 +356,8 @@ export function letterScreen(nav) {
     },
     destroy() {
       running = false;
+      wall?.destroy();
+      wall = null;
       soundPrompt?.remove();
       soundPrompt = null;
       stopLetterBgm();
