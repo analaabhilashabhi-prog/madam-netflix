@@ -17,6 +17,11 @@ const REST_BLUR = 5; // px, faded out to 0 as the word arrives
    floaty, smaller is more immediate. */
 const SCROLL_GLIDE = 0.13;
 
+/* If she chooses to stay with the photos, how long before the first quiet
+   nudge, and how long before it comes back after she waves it away. */
+const FIRST_NUDGE_MS = 75_000;
+const REPEAT_NUDGE_MS = 120_000;
+
 
 /* Emphasis is carried by **bold**, never by punctuation or list markers. */
 const LETTER = `Before You Enter Our Little World
@@ -151,17 +156,62 @@ export function letterScreen(nav) {
   outroMsg.innerHTML = `
     <div class="outro-msg-content">
       <div>Enjoy the ride my Madam Ji ❤️</div>
-      <button id="letter-start-btn" class="btn-white big" style="margin-top:28px; cursor:pointer; font-size: 18px; padding: 14px 28px;">Enter Our World 🍿</button>
+      <p class="outro-sub">There is no hurry. Sit here as long as you like.</p>
+      <div class="outro-actions">
+        <button id="letter-stay-btn" class="btn-ghost big" type="button">Stay in this moment</button>
+        <button id="letter-start-btn" class="btn-white big" type="button">Enter Our World 🍿</button>
+      </div>
     </div>
   `;
 
   const proceedToBumper = () => {
+    clearTimeout(nudgeTimer);
     stopLetterBgm();
     goFullscreen();
     nav.profiles({ withBumper: true });
   };
 
-  outroMsg.addEventListener('click', proceedToBumper);
+  /* The other choice: the letter steps aside and leaves her with the photos
+     and the music. Nothing is asked of her — after a while a quiet nudge
+     appears, and she can push it away as many times as she likes. */
+  function stayInTheMoment() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    outroMsg.classList.remove('letter-outro-active');
+    el.classList.add('staying'); // fades the words out and lifts the scrim
+    scheduleNudge(FIRST_NUDGE_MS);
+  }
+
+  function scheduleNudge(delay) {
+    clearTimeout(nudgeTimer);
+    nudgeTimer = setTimeout(showNudge, delay);
+  }
+
+  function showNudge() {
+    if (!nudgeEl) {
+      nudgeEl = document.createElement('div');
+      nudgeEl.id = 'letter-stay-nudge';
+      nudgeEl.innerHTML = `
+        <div class="nudge-text">Whenever you are ready, our world is waiting 💛</div>
+        <div class="nudge-actions">
+          <button class="btn-white" type="button" data-go>Enter Our World 🍿</button>
+          <button class="btn-ghost small" type="button" data-later>A little longer</button>
+        </div>`;
+      nudgeEl.querySelector('[data-go]').addEventListener('click', proceedToBumper);
+      nudgeEl.querySelector('[data-later]').addEventListener('click', () => {
+        nudgeEl.classList.remove('in');
+        scheduleNudge(REPEAT_NUDGE_MS);
+      });
+      el.appendChild(nudgeEl);
+    }
+    requestAnimationFrame(() => nudgeEl.classList.add('in'));
+  }
+
+  /* Only the buttons act now. The whole overlay used to be one big click
+     target, which would fire the moment she reached for either choice. */
+  outroMsg.querySelector('#letter-start-btn').addEventListener('click', proceedToBumper);
+  outroMsg.querySelector('#letter-stay-btn').addEventListener('click', stayInTheMoment);
 
   /* The drifting photo wall lives here, behind everything, with a scrim over
      it so the letter stays the thing you actually read. */
@@ -189,6 +239,8 @@ export function letterScreen(nav) {
   let running = false;
   let rafId = null;
   let hasTriggeredEnd = false;
+  let nudgeTimer = null;
+  let nudgeEl = null;
 
   function measure() {
     const prevTransform = textWrap.style.transform;
@@ -400,6 +452,7 @@ export function letterScreen(nav) {
     },
     destroy() {
       running = false;
+      clearTimeout(nudgeTimer);
       wall?.destroy();
       wall = null;
       soundPrompt?.remove();

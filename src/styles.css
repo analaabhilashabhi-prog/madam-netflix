@@ -862,6 +862,56 @@ img { display: block; }
   line-height: 1.25;
   text-shadow: 0 0 30px rgba(229, 9, 20, 0.6), 0 4px 20px rgba(0, 0, 0, 0.9);
 }
+.outro-sub {
+  font-family: 'Caveat', 'Segoe Script', cursive;
+  font-size: clamp(20px, 2.2vw, 30px);
+  color: rgba(255, 255, 255, 0.62);
+  margin: 14px 0 0;
+  text-shadow: none;
+}
+.outro-actions {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  align-items: center; justify-content: center;
+  margin-top: 30px;
+}
+.outro-actions .btn-white, .outro-actions .btn-ghost {
+  font-size: 18px; padding: 14px 28px; cursor: pointer;
+  text-shadow: none;
+}
+.outro-actions .btn-ghost { border: 1px solid rgba(255, 255, 255, 0.28); }
+
+/* ---------- staying with the photos ------------------------------------ */
+/* The letter steps aside: the words go, the scrim lifts so the photographs
+   are properly visible, and the music simply keeps playing. */
+#letter-root.staying { --letter-scrim: 0.22; overflow: hidden; }
+#letter-root.staying #letter-spacer,
+#letter-root.staying #letter-progress,
+#letter-root.staying #letter-hint {
+  opacity: 0; pointer-events: none;
+  transition: opacity 1100ms var(--ease);
+}
+#letter-bg-scrim { transition: background 1400ms var(--ease); }
+
+#letter-stay-nudge {
+  position: fixed; left: 50%; bottom: 42px; z-index: 10001;
+  transform: translate(-50%, 18px);
+  display: grid; justify-items: center; gap: 12px;
+  padding: 20px 26px;
+  background: rgba(10, 10, 10, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  opacity: 0; pointer-events: none;
+  transition: opacity 700ms var(--ease), transform 700ms var(--ease);
+}
+#letter-stay-nudge.in { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.nudge-text {
+  font-family: 'Caveat', 'Segoe Script', cursive;
+  font-size: clamp(22px, 2.4vw, 32px);
+  color: #f4ece2;
+}
+.nudge-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; }
 
 .photo-stage { position: relative; display: grid; place-items: center; height: 100%; opacity: 0; transition: opacity 800ms var(--ease); }
 .photo-view.ready .photo-stage { opacity: 1; }
