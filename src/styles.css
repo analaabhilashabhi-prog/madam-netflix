@@ -1008,11 +1008,35 @@ img { display: block; }
 }
 
 /* Full bleed — corner to corner, held off the edges by the side padding
-   rather than by a centred column. */
+   rather than by a centred column. Relative so the pen can be placed inside
+   it and ride the same transform as the words. */
 #letter-text-wrap {
+  position: relative;
   width: 100%; max-width: none;
   padding: 14vh clamp(28px, 4.5vw, 96px) 45vh;
   will-change: transform;
+}
+
+/* ---------- the pen ---------------------------------------------------- */
+#letter-pen {
+  position: absolute; top: 0; left: 0;
+  width: 34px; height: 34px;
+  margin: -26px 0 0 -4px; /* nib tip sits on the baseline, not the icon corner */
+  color: #f6e7c8;
+  opacity: 0;
+  transition: opacity 260ms var(--ease);
+  pointer-events: none;
+  will-change: transform;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.8));
+}
+#letter-pen.writing { opacity: 1; }
+#letter-pen svg { width: 100%; height: 100%; display: block; transform: rotate(-8deg); }
+/* the wet spot of ink under the nib */
+#letter-pen::after {
+  content: ''; position: absolute; left: 3px; bottom: 2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255, 246, 226, 0.85);
+  filter: blur(2.5px);
 }
 
 .letter-heading-para {
@@ -1045,7 +1069,7 @@ img { display: block; }
    which costs far more than it saves and is felt as scroll stutter. */
 .letter-w {
   display: inline-block;
-  opacity: 0.16;
+  opacity: 0; /* ink has not reached this word yet */
   filter: none;
 }
 

@@ -17,6 +17,20 @@ const REST_BLUR = 5; // px, faded out to 0 as the word arrives
    floaty, smaller is more immediate. */
 const SCROLL_GLIDE = 0.13;
 
+/* --- the writing animation ---------------------------------------------
+   A paragraph writes itself as it crosses the anchor line. WRITE_BAND is the
+   extra scroll distance beyond the paragraph's own height that the writing is
+   spread over: larger means a slower, more deliberate hand. WRITE_LEAD starts
+   it a little before the paragraph reaches the anchor, so ink is already
+   flowing as it comes up the screen rather than starting dead. */
+const WRITE_BAND = 300;
+const WRITE_LEAD = 120;
+/* Treated as the width of a space when measuring a paragraph as one run of
+   ink, so the pen keeps moving between words instead of jumping. */
+const SPACE_INK = 10;
+
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
 /* Emphasis is carried by **bold**, never by punctuation or list markers. */
 const LETTER = `Before You Enter Our Little World
 
@@ -127,6 +141,19 @@ export function letterScreen(nav) {
     textWrap.appendChild(pEl);
   });
 
+  /* The nib. It lives inside the text wrap so it is carried by the same
+     transform as the words — no second thing to keep in sync. */
+  const penEl = document.createElement('div');
+  penEl.id = 'letter-pen';
+  penEl.setAttribute('aria-hidden', 'true');
+  penEl.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M3 21l1.2-4.2L16.5 4.5a2 2 0 0 1 2.8 0l0.2 0.2a2 2 0 0 1 0 2.8L7.2 19.8 3 21z"
+            fill="currentColor"/>
+      <path d="M15.2 5.8l3 3" stroke="rgba(0,0,0,0.35)" stroke-width="1.1"/>
+    </svg>`;
+  textWrap.appendChild(penEl);
+
   const stage = document.createElement('div');
   stage.id = 'letter-stage';
   stage.appendChild(textWrap);
@@ -182,6 +209,8 @@ export function letterScreen(nav) {
   /* ---- Animation state ---- */
   let textHeight = 0;
   let wordTops = [];
+  let paras = [];
+  let penVisible = false;
   const anchorFrac = 0.4;
   let currentProgress = 0;
   let hintFaded = false;
@@ -189,11 +218,47 @@ export function letterScreen(nav) {
   let rafId = null;
   let hasTriggeredEnd = false;
 
+  /* Each paragraph is measured as a single run of ink. Every word gets a start
+     and end position along that run, so the pen can advance through the whole
+     paragraph continuously — across line breaks — the way a hand actually
+     writes, rather than each word fading in on its own. */
   function measure() {
     const prevTransform = textWrap.style.transform;
     textWrap.style.transform = 'translateY(0px)';
-    const wrapRectTop = textWrap.getBoundingClientRect().top;
-    wordTops = allWords.map(span => span.getBoundingClientRect().top - wrapRectTop);
+    const wrapRect = textWrap.getBoundingClientRect();
+
+    paras = [];
+    for (const pEl of textWrap.children) {
+      const spans = pEl.querySelectorAll ? [...pEl.querySelectorAll('.letter-w')] : [];
+      if (!spans.length) continue;
+
+      let ink = 0;
+      const words = spans.map((span) => {
+        const r = span.getBoundingClientRect();
+        const word = {
+          span,
+          x: r.left - wrapRect.left,
+          y: r.top - wrapRect.top,
+          w: r.width,
+          h: r.height,
+          inkStart: ink,
+        };
+        ink += r.width + SPACE_INK;
+        word.inkEnd = ink;
+        return word;
+      });
+
+      const first = words[0];
+      const last = words[words.length - 1];
+      paras.push({
+        words,
+        ink,
+        top: first.y,
+        height: Math.max(last.y + last.h - first.y, first.h),
+      });
+    }
+
+    wordTops = allWords.map((span) => span.getBoundingClientRect().top - wrapRect.top);
     textHeight = textWrap.scrollHeight;
     textWrap.style.transform = prevTransform;
     // More scroll room — 2x viewport height so the end doesn't trigger early
@@ -214,44 +279,71 @@ export function letterScreen(nav) {
     textWrap.style.transform = `translateY(${translateY.toFixed(2)}px)`;
 
     const anchorY = window.innerHeight * anchorFrac;
-    const band = 160;
-    const lead = 30;
+    let pen = null;
 
-    for (let i = 0; i < allWords.length; i++) {
-      const screenY = (wordTops[i] || 0) + translateY;
-      const dist = screenY - anchorY;
-      let t;
-      if (dist <= -lead) {
-        t = 1;
-      } else if (dist >= band) {
-        t = 0;
-      } else {
-        t = 1 - (dist + lead) / (band + lead);
+    for (const para of paras) {
+      const screenTop = para.top + translateY;
+      /* A paragraph writes itself as it crosses the anchor line. Taller
+         paragraphs take proportionally more scroll, so a long passage is not
+         rushed through in the same distance as a one-line one. */
+      const span = para.height + WRITE_BAND;
+      const p = clamp01((anchorY + WRITE_LEAD - screenTop) / span);
+      const penInk = p * para.ink;
+
+      for (const word of para.words) {
+        let opacity;
+        let cut; // 0..1 of the word that has been written, 1 = all of it
+        if (word.inkEnd <= penInk) {
+          opacity = 1;
+          cut = 1;
+        } else if (word.inkStart >= penInk) {
+          opacity = 0;
+          cut = 0;
+        } else {
+          opacity = 1;
+          /* Clamped, because a word's ink span includes the space that follows
+             it. Unclamped the nib would run past the word's right edge and, at
+             the end of a line, straight off into empty space. */
+          cut = word.w > 0 ? Math.min(1, (penInk - word.inkStart) / word.w) : 1;
+          // the nib is inside this word — this is where the pen sits
+          if (!pen && p > 0 && p < 1) {
+            pen = { x: word.x + cut * word.w, y: word.y + word.h * 0.78 };
+          }
+        }
+
+        const el = word.span;
+        if (el._o !== opacity) {
+          el.style.opacity = opacity === 1 ? '' : String(opacity);
+          el._o = opacity;
+        }
+        /* Only the word under the nib is clipped. Everything else is either
+           fully written or not there at all, so it carries no clip-path —
+           two thousand live clip-paths would cost far more than they show. */
+        const clip = cut >= 1 ? '' : `inset(0 ${((1 - cut) * 100).toFixed(1)}% 0 0)`;
+        if (el._c !== clip) {
+          el.style.clipPath = clip;
+          el._c = clip;
+        }
       }
-      /* The floor is what makes the reveal readable as a reveal. At 0.7 an
-         unread word sat almost as bright as a read one, so the whole letter
-         looked revealed before she scrolled a pixel. Low enough to be clearly
-         "not yet", high enough that the page is never a black screen. */
-      const opacity = Math.max(REST_OPACITY, t);
-      const blur = REST_BLUR * (1 - t);
-      const span = allWords[i];
-      if (span._o !== opacity) {
-        span.style.opacity = opacity.toFixed(2);
-        span._o = opacity;
+    }
+
+    if (pen) {
+      penEl.style.transform = `translate3d(${pen.x.toFixed(1)}px, ${pen.y.toFixed(1)}px, 0)`;
+      if (!penVisible) {
+        penEl.classList.add('writing');
+        penVisible = true;
       }
-      /* 'none' rather than blur(0px): a zero-radius blur is still a filter the
-         compositor has to set up, and there are two thousand of these. */
-      if (span._b !== blur) {
-        span.style.filter = blur < 0.05 ? 'none' : `blur(${blur.toFixed(2)}px)`;
-        span._b = blur;
-      }
+    } else if (penVisible) {
+      penEl.classList.remove('writing');
+      penVisible = false;
     }
 
     // Outro trigger — only when truly at the end AND the last words are revealed
     if (progress > 0.99 && !hasTriggeredEnd) {
       // Guard: check that the last 10 words are actually visible (opacity > 0.7)
       const lastWords = allWords.slice(-10);
-      const allRevealed = lastWords.every(w => (w._o || 0) > 0.7);
+      // written words end at opacity 1 with no clip left on them
+      const allRevealed = lastWords.every(w => w._o === 1 && !w._c);
       if (!allRevealed) return;
 
       hasTriggeredEnd = true;
