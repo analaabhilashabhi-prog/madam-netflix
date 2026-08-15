@@ -1006,6 +1006,13 @@ img { display: block; }
   will-change: opacity, filter;
 }
 
+/* the lines that carry weight — heavier and warmer than the prose around them,
+   so emphasis is felt rather than punctuated */
+.letter-strong {
+  font-weight: 700;
+  color: #fff6ea;
+}
+
 #letter-progress {
   position: fixed; left: 0; top: 0;
   height: 3px; background: #e50914;
