@@ -1017,21 +1017,22 @@ img { display: block; }
 .letter-heading-para {
   margin-bottom: 1.1em;
   line-height: 1.2;
-  font-family: 'Cookie', 'Segoe Script', cursive;
-  font-size: clamp(46px, 7vw, 92px);
-  font-weight: 400; /* Cookie ships one weight; bolding it only smears the script */
+  font-family: 'Caveat', 'Segoe Script', cursive;
+  font-size: clamp(44px, 6.4vw, 86px);
+  font-weight: 700; /* Caveat is variable 400-700, so this is a real weight */
   text-align: center;
   color: #ffffff;
 }
 
-/* Cookie is a joined script: it sits smaller on the em than a serif and its
-   loops need room, so it wants a larger size and a taller line than Georgia. */
+/* Caveat is an unjoined handwriting face: more legible than a joined script at
+   length, with tall ascenders and descenders that want room around them. */
 .letter-para {
   margin-bottom: 1.05em;
-  line-height: 1.45;
-  font-family: 'Cookie', 'Segoe Script', cursive;
-  font-size: clamp(34px, 4.6vw, 60px);
-  letter-spacing: 0.005em;
+  line-height: 1.42;
+  font-family: 'Caveat', 'Segoe Script', cursive;
+  font-size: clamp(32px, 4.3vw, 58px);
+  font-weight: 400;
+  letter-spacing: 0.004em;
   text-align: left;
   color: #f2ede6;
 }
@@ -1053,11 +1054,11 @@ img { display: block; }
 }
 #letter-root.ink .letter-w { opacity: 0.16; }
 
-/* The lines that carry weight. Cookie has one weight only, so asking for bold
-   makes the browser synthesise it and the joined strokes smear. Emphasis comes
-   from brightness and a soft glow instead, which suits a script far better. */
+/* The lines that carry weight. Caveat carries a real 400-700 axis, so this is
+   a genuinely heavier cut rather than a synthesised smear — the brightness is
+   kept alongside it. */
 .letter-strong {
-  font-weight: 400;
+  font-weight: 700;
   color: #ffffff;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.92), 0 0 26px rgba(255, 238, 214, 0.35);
 }
