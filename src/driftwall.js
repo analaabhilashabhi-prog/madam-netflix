@@ -18,8 +18,19 @@ const columnFactor = (index, variance) => {
   return 1 + variance * pseudo;
 };
 
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* matchMedia is guarded throughout: if it is missing the wall should still be
+   built and still drift, rather than throwing and leaving her with nothing. */
+const motionMedia = () => {
+  try {
+    return typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const prefersReducedMotion = () => motionMedia()?.matches === true;
 
 /* The wall needs enough tiles to fill every column twice over, otherwise the
    wrap is visible as a gap. With fewer photos than that, repeat them. */
@@ -62,7 +73,12 @@ export function driftWall(photoUrls, options = {}) {
   const root = document.createElement('div');
   root.className = `drift-wall ${className}`.trim();
   root.setAttribute('aria-hidden', 'true'); // decorative; the letter is the content
-  Object.assign(root.style, {
+  /* Custom properties MUST go through setProperty. They are not real
+     properties on CSSStyleDeclaration, so Object.assign silently drops them
+     and every calc() below turns invalid — which collapses the tiles to zero
+     height and makes the whole wall disappear. React's style prop hides this
+     by special-casing `--` keys; plain DOM does not. */
+  const vars = {
     '--dw-tile-w': `${tileWidth}px`,
     '--dw-tile-h': `${tileHeight}px`,
     '--dw-gap': `${gap}px`,
@@ -72,7 +88,8 @@ export function driftWall(photoUrls, options = {}) {
     '--dw-gray': grayscale ? '1' : '0',
     '--dw-overlay': overlayColor,
     '--dw-edge': `${Math.max(0, (1 - fade) * 100)}%`,
-  });
+  };
+  for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value);
 
   const plane = document.createElement('div');
   plane.className = 'drift-wall__plane';
@@ -96,6 +113,16 @@ export function driftWall(photoUrls, options = {}) {
     tracks.length = 0;
     meta.length = 0;
 
+    /* Tiles sit on a rotated plane and are constantly moving into view, so
+       lazy loading shows blank gaps as they arrive. With a small wall just
+       load everything up front; only defer once there is a lot of it. */
+    let total = 0;
+    columnItems.forEach((col) => {
+      const ch = Math.max(unit, col.length * unit);
+      total += col.length * Math.max(2, Math.ceil((viewportHeight * 1.6) / ch) + 1);
+    });
+    const loading = total > 90 ? 'lazy' : 'eager';
+
     columnItems.forEach((col, c) => {
       const copyHeight = Math.max(unit, col.length * unit);
       const copies = Math.max(2, Math.ceil((viewportHeight * 1.6) / copyHeight) + 1);
@@ -115,7 +142,7 @@ export function driftWall(photoUrls, options = {}) {
           const img = document.createElement('img');
           img.src = url;
           img.alt = '';
-          img.loading = 'lazy';
+          img.loading = loading;
           img.decoding = 'async';
           img.draggable = false;
           // a dead link must not leave a broken-image icon on her letter
@@ -189,13 +216,13 @@ export function driftWall(photoUrls, options = {}) {
     lastTs = null;
   }
 
-  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const motionQuery = motionMedia();
   const onMotionChange = (e) => {
     reduced = e.matches;
     if (reduced) stop();
     else start();
   };
-  motionQuery.addEventListener('change', onMotionChange);
+  motionQuery?.addEventListener?.('change', onMotionChange);
 
   /* Rebuild only when the viewport height changes enough to expose a gap. */
   let resizeTimer = null;
@@ -222,7 +249,7 @@ export function driftWall(photoUrls, options = {}) {
     destroy() {
       stop();
       clearTimeout(resizeTimer);
-      motionQuery.removeEventListener('change', onMotionChange);
+      motionQuery?.removeEventListener?.('change', onMotionChange);
       window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', onVisibility);
       root.remove();

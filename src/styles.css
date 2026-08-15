@@ -1112,6 +1112,17 @@ img { display: block; }
   perspective: var(--dw-perspective, 1200px);
   perspective-origin: 50% 50%;
   pointer-events: none;
+  /* Defaults, so the wall still has real dimensions even if the script never
+     sets these. Without them a missing variable makes every calc() invalid
+     and the tiles collapse to nothing. */
+  --dw-tile-w: 200px;
+  --dw-tile-h: 132px;
+  --dw-gap: 18px;
+  --dw-radius: 14px;
+  --dw-dim: 0.32;
+  --dw-gray: 0;
+  --dw-overlay: #060010;
+  --dw-edge: 40%;
   -webkit-mask-image:
     radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
     linear-gradient(to top, #000 var(--dw-edge), transparent 100%);

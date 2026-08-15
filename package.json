@@ -6,10 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node tests/security.test.js"
+    "test": "node tests/security.test.js && node tests/driftwall.test.js",
+    "test:security": "node tests/security.test.js",
+    "test:ui": "node tests/driftwall.test.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
     "mongodb": "^7.5.0"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   }
 }
