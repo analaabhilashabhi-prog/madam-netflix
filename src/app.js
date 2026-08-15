@@ -13,6 +13,7 @@ import { shortsScreen } from './screens/shorts.js';
 import { photoScreen } from './screens/photo.js';
 import { adminScreen } from './screens/admin.js';
 import { gateScreen } from './screens/gate.js';
+import { startBrowseBgm, pauseBrowseBgm } from './browsebgm.js';
 
 const nav = {
   letter() {
@@ -31,8 +32,11 @@ const nav = {
       const bumper = playBumper();
       show(profilesScreen(nav));
       await bumper;
+      // only after the ta-dum has finished, so the two never talk over each other
+      startBrowseBgm();
     } else {
       show(profilesScreen(nav));
+      startBrowseBgm();
     }
   },
 
@@ -41,6 +45,7 @@ const nav = {
     if (!p) return nav.profiles();
     setHash(`/home/${profileId}`);
     show(homeScreen(nav, profileId));
+    startBrowseBgm(); // she is back from a video — pick the music up again
   },
 
   /* Section 3.1 + 3.5: every video gets the bumper; photos fade in directly.
@@ -51,6 +56,10 @@ const nav = {
     const profile = profileById(profileId);
     if (!item || !profile) return toast('That item is gone');
     setHash(`/watch/${profileId}/${itemId}`);
+
+    /* Out of the way before anything starts — the memory's own sound, or the
+       photo screen's music, should be the only thing playing. */
+    pauseBrowseBgm();
 
     if (item.kind === 'photo') {
       const screen = photoScreen(nav, { profile, item });
@@ -71,6 +80,7 @@ const nav = {
 
   admin() {
     setHash('/admin');
+    pauseBrowseBgm(); // your side of the app, not hers — no soundtrack
     show(adminScreen(nav));
   },
 };

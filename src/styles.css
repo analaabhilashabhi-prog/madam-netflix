@@ -1135,6 +1135,20 @@ img { display: block; }
 .gal-cell:hover .gal-del, .gal-del:focus-visible { opacity: 1; }
 .gal-del .icon { width: 15px; height: 15px; fill: #ff6b6b; }
 
+/* ---------- browse music (hidden YouTube audio) ------------------------- */
+/* Sized to a single pixel and left in the corner rather than thrown far
+   off-screen: a wildly off-screen iframe can be throttled or refused, and then
+   the music never starts at all. */
+#browse-bgm {
+  position: fixed; left: 0; bottom: 0;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+  pointer-events: none;
+  z-index: -1;
+}
+#browse-bgm iframe { width: 320px; height: 180px; border: 0; }
+
 /* ---------- DriftWall (photo wall behind the letter) -------------------- */
 .drift-wall {
   position: absolute; inset: 0;

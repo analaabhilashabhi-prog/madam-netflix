@@ -7,6 +7,15 @@ export const BUMPER = {
   maxSeconds: 30,
 };
 
+/* The music that plays while she is browsing — profiles, home, search. It
+   stops the moment a video starts so the video's own sound has the room, and
+   picks up again when she comes back. */
+export const BROWSE_BGM = {
+  videoId: 'I5_BuHWAlnw',
+  start: 0,
+  volume: 32, // 0-100, deliberately under the videos
+};
+
 export const LETTER_BGM = {
   src: 'assets/music/letter-bgm.mp3',
   videoId: 'U5UhkvH3IcI',
