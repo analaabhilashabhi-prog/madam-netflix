@@ -10,7 +10,7 @@ export const BUMPER = {
 export const LETTER_BGM = {
   src: 'assets/music/letter-bgm.mp3',
   videoId: 'U5UhkvH3IcI',
-  start: 0,
+  start: 10, // seconds — skips the intro, and every loop restarts here too
   volume: 80,
 };
 

@@ -6,6 +6,22 @@ import { LETTER_BGM } from './config.js';
 let audioElement = null;
 let isPlaying = false;
 
+const startAt = () => Math.max(0, Number(LETTER_BGM.start) || 0);
+
+/* currentTime can only be set once the browser knows the track's duration, so
+   if metadata has not arrived yet, wait for it. */
+function seekToStart(audio, force = false) {
+  const t = startAt();
+  if (!t) return;
+  // don't yank a track that is already underway back to the start
+  if (!force && audio.currentTime > 0.5) return;
+  const apply = () => {
+    try { audio.currentTime = t; } catch (_) {}
+  };
+  if (audio.readyState >= 1) apply();
+  else audio.addEventListener('loadedmetadata', apply, { once: true });
+}
+
 // Pre-create and preload audio element as soon as app loads
 export function getAudioElement() {
   if (!audioElement) {
@@ -16,7 +32,9 @@ export function getAudioElement() {
         el.id = 'madam-letter-audio';
         el.src = LETTER_BGM.src || 'assets/music/letter-bgm.mp3';
         el.preload = 'auto';
-        el.loop = true;
+        /* Looping is done by hand: the native loop attribute always restarts
+           at 0, which would play the intro we are deliberately skipping. */
+        el.loop = false;
         el.setAttribute('playsinline', '');
         el.setAttribute('webkit-playsinline', '');
         el.style.display = 'none';
@@ -34,7 +52,15 @@ export function getAudioElement() {
     // keep the flag honest even if the browser pauses us on its own
     audioElement.addEventListener('play', () => { isPlaying = true; });
     audioElement.addEventListener('pause', () => { isPlaying = false; });
+    // loop back to the start offset, not to 0
+    audioElement.addEventListener('ended', () => {
+      const el = audioElement;
+      if (!el) return;
+      seekToStart(el, true);
+      el.play().catch(() => {});
+    });
     try { audioElement.load(); } catch (_) {}
+    seekToStart(audioElement);
   }
   return audioElement;
 }
@@ -54,6 +80,7 @@ export function startLetterBgm() {
 
   audio.volume = (LETTER_BGM.volume || 85) / 100;
   audio.muted = false;
+  seekToStart(audio);
 
   const playPromise = audio.play();
   if (playPromise === undefined) {
@@ -84,7 +111,7 @@ export function stopLetterBgm() {
   if (audioElement) {
     try {
       audioElement.pause();
-      audioElement.currentTime = 0;
+      audioElement.currentTime = startAt(); // rewind to the offset, not to 0
     } catch (_) {}
   }
   isPlaying = false;
