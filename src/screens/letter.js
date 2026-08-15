@@ -337,6 +337,8 @@ export function letterScreen(nav) {
            drift rate in pixels per second. */
         wall = driftWall(urls.length ? urls : LETTER_GALLERY_PLACEHOLDERS, {
           columns: 'auto', // as many as it takes to fill her screen
+          tilt: 0, turn: 0, roll: 0, depth: 0, // straight on, not tipped in 3D
+          alternate: false, // every column drifts the same way, none cross
           speed: 34,
           dim: 0.9,
           tint: 0.12,

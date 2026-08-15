@@ -48,19 +48,23 @@ export function driftWall(photoUrls, options = {}) {
 
   const {
     columns = 'auto', // 'auto' works out how many it takes to fill the screen
-    scale = 1.3, // the plane is blown up past the viewport so no edge shows
-    overfill = 1.35, // and then some, to survive the perspective squeeze
+    scale = 1, // no perspective squeeze to compensate for while it is flat
+    overfill = 1.15,
     tileWidth = 200,
     tileHeight = 132,
     gap = 18,
     radius = 14,
-    tilt = 16,
-    turn = -14,
+    /* Straight on by default: a flat, square grid facing the viewer. Give
+       these angles a value and the wall tips back into 3D. */
+    tilt = 0,
+    turn = 0,
     roll = 0,
     perspective = 1200,
-    depth = 120,
+    depth = 0,
     speed = 42,
     direction = 'up',
+    /* false = every column travels the same way, so none cross each other */
+    alternate = false,
     variance = 0.45,
     fade = 0.1, // how far the edges dissolve; higher hides more of the wall
     dim = 0.9, // resting opacity of a tile
@@ -131,7 +135,8 @@ export function driftWall(photoUrls, options = {}) {
 
     const dirSign = direction === 'up' ? 1 : -1;
     velocities = columnItems.map((_, c) => {
-      const altSign = c % 2 === 0 ? 1 : -1; // neighbours drift opposite ways
+      // with alternate off every column runs the same way, only at its own pace
+      const altSign = alternate && c % 2 === 1 ? -1 : 1;
       return speed * columnFactor(c, variance) * dirSign * altSign;
     });
 

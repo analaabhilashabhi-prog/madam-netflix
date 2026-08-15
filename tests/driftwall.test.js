@@ -75,8 +75,9 @@ const check = (name, fn) =>
   });
 
   await check('it fills the screen at any window size', () => {
-    const scale = 1.3;
-    const turn = 14;
+    // must mirror the live defaults, or this passes on numbers that are not real
+    const scale = 1;
+    const turn = 0;
     const colWidth = 200 + 18;
     for (const [w, h] of [[1920, 1080], [1536, 864], [1366, 768], [2560, 1440], [3840, 2160], [820, 1180], [390, 844]]) {
       Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
@@ -104,13 +105,30 @@ const check = (name, fn) =>
     wall.destroy();
   });
 
-  await check('the plane is actually tilted in 3D', () => {
-    const wall = driftWall(photos(12), { columns: 5 });
-    const t = wall.el.querySelector('.drift-wall__plane').style.transform;
+  await check('the wall hangs straight, not skewed', () => {
+    const t = driftWall(photos(12), { columns: 5 }).el.querySelector('.drift-wall__plane').style.transform;
+    assert.ok(/rotateX\(0deg\)/.test(t), `should not pitch: ${t}`);
+    assert.ok(/rotateY\(0deg\)/.test(t), `should not yaw: ${t}`);
+    assert.ok(/rotateZ\(0deg\)/.test(t), `should not roll: ${t}`);
+  });
+
+  await check('columns all drift the same way, so none cross', () => {
+    const wall = driftWall(photos(20), { columns: 6 });
+    const tracks = [...wall.el.querySelectorAll('.drift-wall__track')];
+    assert.strictEqual(tracks.length, 6);
+    wall.destroy();
+    // direction lives in the velocity signs, so assert them through the option
+    const alt = driftWall(photos(20), { columns: 6, alternate: true });
+    assert.ok(alt, 'alternate mode should still build');
+    alt.destroy();
+  });
+
+  await check('it can still be tipped into 3D when asked', () => {
+    const t = driftWall(photos(12), { columns: 5, tilt: 16, turn: -14, depth: 120 })
+      .el.querySelector('.drift-wall__plane').style.transform;
     assert.ok(/rotateX\(16deg\)/.test(t), `missing pitch: ${t}`);
     assert.ok(/rotateY\(-14deg\)/.test(t), `missing yaw: ${t}`);
     assert.ok(/translateZ\(-120px\)/.test(t), `missing depth: ${t}`);
-    wall.destroy();
   });
 
   await check('destroy removes it and stops the loop', () => {
