@@ -126,7 +126,6 @@ export function driftWall(photoUrls, options = {}) {
     className = '',
   } = options;
 
-  const items = padToMinimum(urls, minimumTiles);
 
   const root = document.createElement('div');
   root.className = `drift-wall ${className}`.trim();
@@ -186,6 +185,11 @@ export function driftWall(photoUrls, options = {}) {
 
   function build(viewportHeight) {
     const count = columnCount();
+
+    /* Enough tiles that every column gets several *different* photos. With
+       fewer than this each column ends up holding one image and repeating it
+       down the screen, which reads as a grid of duplicates rather than a wall. */
+    const items = padToMinimum(urls, Math.max(minimumTiles, count * 3));
 
     /* pack the photos by height, shortest column first */
     const sized = items.map((url) => ({ url, height: heightFor(url) }));
@@ -273,7 +277,7 @@ export function driftWall(photoUrls, options = {}) {
 
   /* Measure every photo first, then lay out once. Building on guessed heights
      and re-laying out afterwards would make the whole wall visibly jump. */
-  const ready = Promise.all([...new Set(items)].map((url) => measureRatio(url, measureTimeout)))
+  const ready = Promise.all([...new Set(urls)].map((url) => measureRatio(url, measureTimeout)))
     .then(() => {
       if (destroyed) return;
       build(viewport);

@@ -18,9 +18,33 @@ export const LETTER_BGM = {
    Panel replaces this list entirely — these are only placeholders so the wall
    is visible before you have added anything of your own. Ten is the minimum
    for it to look full; below that the wall repeats what it has. */
+/* Deliberately mixed shapes — portraits, squares, landscapes and phone clips —
+   so the masonry has something to actually lay out. Asking picsum for the same
+   crop every time is what made an earlier version look like a plain grid. */
 export const LETTER_GALLERY_PLACEHOLDERS = [
-  1015, 1025, 1039, 1043, 1044, 1050, 1062, 1069, 1074, 1080, 1084, 106, 110, 133, 164,
-].map((id) => `https://picsum.photos/id/${id}/600/400`);
+  [1015, 600, 400],  // 3:2 landscape
+  [1025, 400, 600],  // 2:3 portrait
+  [1039, 600, 600],  // square
+  [1043, 800, 450],  // 16:9
+  [1044, 450, 800],  // 9:16
+  [1050, 640, 480],  // 4:3
+  [1062, 480, 640],  // 3:4
+  [1069, 600, 400],
+  [1074, 500, 750],
+  [1080, 600, 600],
+  [1084, 700, 400],
+  [106, 400, 620],
+  [110, 800, 500],
+  [133, 520, 700],
+  [164, 640, 480],
+  [180, 450, 800],
+  [211, 700, 700],
+  [225, 800, 450],
+  [239, 420, 640],
+  [244, 600, 400],
+  [287, 560, 760],
+  [301, 640, 420],
+].map(([id, w, h]) => `https://picsum.photos/id/${id}/${w}/${h}`);
 
 /* Section 4.4 — the PIN itself deliberately does NOT live here. This file is
    served to the browser, so anything in it is readable by anyone who opens the

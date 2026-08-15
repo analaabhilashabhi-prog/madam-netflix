@@ -105,6 +105,30 @@ const check = (name, fn) =>
     wall.destroy();
   });
 
+  await check('no column is one photo repeated down the screen', async () => {
+    // 15 photos over 11 columns used to give each column a single image
+    Object.defineProperty(window, 'innerWidth', { value: 1920, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 1080, configurable: true });
+    const wall = await make(photos(15), { columns: 'auto' });
+    wall.el.querySelectorAll('.drift-wall__track').forEach((track, i) => {
+      const srcs = [...track.querySelectorAll('img')].map((n) => n.getAttribute('src'));
+      assert.ok(new Set(srcs).size >= 3, `column ${i} only shows ${new Set(srcs).size} distinct photo(s)`);
+    });
+    wall.destroy();
+  });
+
+  await check('the shipped placeholders are genuinely mixed shapes', async () => {
+    const { LETTER_GALLERY_PLACEHOLDERS } = await import('../src/config.js');
+    const ratios = new Set(
+      LETTER_GALLERY_PLACEHOLDERS.map((u) => {
+        const m = /\/(\d+)\/(\d+)$/.exec(u);
+        return m ? (Number(m[1]) / Number(m[2])).toFixed(2) : 'x';
+      })
+    );
+    assert.ok(LETTER_GALLERY_PLACEHOLDERS.length >= 20, 'want enough placeholders to fill a wide wall');
+    assert.ok(ratios.size >= 6, `placeholders must vary in shape, found ${ratios.size} ratio(s)`);
+  });
+
   await check('packColumns fills the shortest column each time', () => {
     const items = [300, 100, 100, 100, 400, 120].map((height, i) => ({ url: `u${i}`, height }));
     const cols = packColumns(items, 3, 0);
