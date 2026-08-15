@@ -66,6 +66,17 @@ export function stopLetterBgm() {
   isPlaying = false;
 }
 
+export function toggleLetterBgm() {
+  const audio = getAudioElement();
+  if (isPlaying) {
+    audio.pause();
+    isPlaying = false;
+  } else {
+    audio.play().catch(() => {});
+    isPlaying = true;
+  }
+}
+
 export function isLetterBgmPlaying() {
   return isPlaying;
 }
