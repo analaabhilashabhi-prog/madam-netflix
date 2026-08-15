@@ -13,6 +13,9 @@ import { LETTER_GALLERY_PLACEHOLDERS } from '../config.js';
    for a starker reveal, up if it ever feels too dark. */
 const REST_OPACITY = 0.16;
 const REST_BLUR = 5; // px, faded out to 0 as the word arrives
+/* Seconds for the scroll to settle onto the real position. Larger is more
+   floaty, smaller is more immediate. */
+const SCROLL_GLIDE = 0.13;
 
 /* Emphasis is carried by **bold**, never by punctuation or list markers. */
 const LETTER = `Before You Enter Our Little World
@@ -236,8 +239,10 @@ export function letterScreen(nav) {
         span.style.opacity = opacity.toFixed(2);
         span._o = opacity;
       }
+      /* 'none' rather than blur(0px): a zero-radius blur is still a filter the
+         compositor has to set up, and there are two thousand of these. */
       if (span._b !== blur) {
-        span.style.filter = `blur(${blur.toFixed(2)}px)`;
+        span.style.filter = blur < 0.05 ? 'none' : `blur(${blur.toFixed(2)}px)`;
         span._b = blur;
       }
     }
@@ -263,7 +268,9 @@ export function letterScreen(nav) {
     }
   }
 
-  function loop() {
+  let lastFrameTs = 0;
+
+  function loop(ts) {
     if (!running) return;
     // #letter-root is position:fixed with overflow-y:auto — it IS the scroll container.
     // Only use el.scrollTop, never window.scrollY or getBoundingClientRect.
@@ -271,8 +278,16 @@ export function letterScreen(nav) {
     const scrolled = Math.min(Math.max(el.scrollTop, 0), total);
     const targetProgress = total > 0 ? scrolled / total : 0;
 
-    currentProgress += (targetProgress - currentProgress) * 0.1;
-    if (Math.abs(targetProgress - currentProgress) < 0.0001) {
+    /* Frame-rate independent easing. A flat 0.1 per frame chases twice as fast
+       on a 120Hz screen as on a 60Hz one, which is what makes the glide feel
+       different from machine to machine. This settles at the same rate on any
+       refresh rate. */
+    const dt = lastFrameTs ? Math.min(0.05, Math.max(0, (ts || 0) - lastFrameTs) / 1000) : 1 / 60;
+    lastFrameTs = ts || 0;
+    const ease = 1 - Math.exp(-dt / SCROLL_GLIDE);
+
+    currentProgress += (targetProgress - currentProgress) * ease;
+    if (Math.abs(targetProgress - currentProgress) < 0.00005) {
       currentProgress = targetProgress;
     }
 
@@ -280,11 +295,12 @@ export function letterScreen(nav) {
     rafId = requestAnimationFrame(loop);
   }
 
+  /* The rAF chain already runs continuously while the screen is alive. Calling
+     loop() from here as well started a NEW chain on every scroll event, so a
+     single flick left dozens of them running in parallel, each re-rendering
+     every word in the letter. That is what made scrolling feel like it stuck. */
   const onScroll = () => {
-    if (running) {
-      unlockAudio(); // no-op once it is already playing
-      loop();
-    }
+    if (running) unlockAudio(); // no-op once it is already playing
   };
 
   const GESTURES = ['pointerdown', 'click', 'touchend', 'keydown'];
