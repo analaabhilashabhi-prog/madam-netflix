@@ -161,9 +161,9 @@ export function letterScreen(nav) {
       } else {
         t = 1 - (dist + lead) / (band + lead);
       }
-      // Ensure words near top are visible on load (minimum 0.15 opacity) so it is NEVER pitch black
-      const opacity = Math.max(0.15, t);
-      const blur = 6 * (1 - t);
+      // Ensure words are always clearly visible (minimum 0.7 opacity) so text is NEVER pitch black
+      const opacity = Math.max(0.7, t);
+      const blur = 2 * (1 - t);
       const span = allWords[i];
       if (span._o !== opacity) {
         span.style.opacity = opacity.toFixed(2);

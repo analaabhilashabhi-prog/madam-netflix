@@ -1001,8 +1001,8 @@ img { display: block; }
 
 .letter-w {
   display: inline-block;
-  opacity: 0.15;
-  filter: blur(6px);
+  opacity: 0.9;
+  filter: none;
   will-change: opacity, filter;
 }
 

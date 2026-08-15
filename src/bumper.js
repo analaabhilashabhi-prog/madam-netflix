@@ -73,7 +73,7 @@ export async function playBumper({ label = '', vertical = false } = {}) {
             if (e.data === 0 && armed) finish(); // ENDED
           },
         });
-        await bufferAhead(player, { targetSeconds: 12, timeout: 7000, onProgress: (p) => loader.progress(p) });
+        await bufferAhead(player, { targetSeconds: 6, timeout: 3000, onProgress: (p) => loader.progress(p) });
         overlay.classList.add('ready');
         try {
           if (!sound.muted) player.unMute();
@@ -95,10 +95,7 @@ export async function playBumper({ label = '', vertical = false } = {}) {
           }
         }, 1200);
 
-        /* The intro must play all the way through. Never cut it on a wall-clock
-           timer — YouTube can take a moment to actually start after the seek,
-           which would clip the end. Follow the playhead instead, and only bail
-           out if playback is genuinely stuck. */
+        /* Follow playhead and bail out if playback is genuinely stuck. */
         const startedAt = performance.now();
         let lastTime = 0;
         let stalledFor = 0;
@@ -118,7 +115,7 @@ export async function playBumper({ label = '', vertical = false } = {}) {
           } else {
             stalledFor += 150;
           }
-          if (stalledFor > 8000) return finish('stalled');
+          if (stalledFor > 3500) return finish('stalled');
           if (performance.now() - startedAt > BUMPER.maxSeconds * 1000) finish('hard stop');
         }, 150);
       } catch (e) {
