@@ -9,6 +9,11 @@ import { driftWall } from '../driftwall.js';
 import { fetchGallery } from '../store.js';
 import { LETTER_GALLERY_PLACEHOLDERS } from '../config.js';
 
+/* How a word looks before the scroll has reached it. Turn REST_OPACITY down
+   for a starker reveal, up if it ever feels too dark. */
+const REST_OPACITY = 0.16;
+const REST_BLUR = 5; // px, faded out to 0 as the word arrives
+
 /* Emphasis is carried by **bold**, never by punctuation or list markers. */
 const LETTER = `Before You Enter Our Little World
 
@@ -220,9 +225,12 @@ export function letterScreen(nav) {
       } else {
         t = 1 - (dist + lead) / (band + lead);
       }
-      // Ensure words are always clearly visible (minimum 0.7 opacity) so text is NEVER pitch black
-      const opacity = Math.max(0.7, t);
-      const blur = 2 * (1 - t);
+      /* The floor is what makes the reveal readable as a reveal. At 0.7 an
+         unread word sat almost as bright as a read one, so the whole letter
+         looked revealed before she scrolled a pixel. Low enough to be clearly
+         "not yet", high enough that the page is never a black screen. */
+      const opacity = Math.max(REST_OPACITY, t);
+      const blur = REST_BLUR * (1 - t);
       const span = allWords[i];
       if (span._o !== opacity) {
         span.style.opacity = opacity.toFixed(2);

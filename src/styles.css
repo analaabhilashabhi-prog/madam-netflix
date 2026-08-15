@@ -1007,9 +1007,11 @@ img { display: block; }
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.92), 0 0 42px rgba(0, 0, 0, 0.75);
 }
 
+/* Full bleed — corner to corner, held off the edges by the side padding
+   rather than by a centred column. */
 #letter-text-wrap {
-  max-width: 1200px; width: 92vw;
-  padding: 14vh 24px 45vh;
+  width: 100%; max-width: none;
+  padding: 14vh clamp(28px, 4.5vw, 96px) 45vh;
   will-change: transform;
 }
 
@@ -1032,9 +1034,11 @@ img { display: block; }
   color: #f0f0f0;
 }
 
+/* Starts at the resting value so there is no flash of fully-lit text in the
+   frame before the first render runs. JS then drives it per word. */
 .letter-w {
   display: inline-block;
-  opacity: 0.9;
+  opacity: 0.16;
   filter: none;
   will-change: opacity, filter;
 }
