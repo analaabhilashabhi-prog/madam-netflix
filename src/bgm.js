@@ -75,12 +75,12 @@ async function startYouTubeFallback() {
   try {
     bgmPlayer = await createPlayer(bgmHost, {
       videoId: LETTER_BGM.videoId,
-      start: LETTER_BGM.start || 48,
+      start: LETTER_BGM.start || 0,
       loop: true,
       muted: false,
     });
     if (bgmPlayer) {
-      bgmPlayer.seek(LETTER_BGM.start || 48);
+      bgmPlayer.seek(LETTER_BGM.start || 0);
       bgmPlayer.volume(LETTER_BGM.volume || 80);
       bgmPlayer.unMute();
       bgmPlayer.play();
