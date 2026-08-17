@@ -1219,14 +1219,13 @@ img { display: block; }
   --dw-gray: 0;
   --dw-overlay: #060010;
   --dw-edge: 90%;
-  -webkit-mask-image:
-    radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
-    linear-gradient(to top, #000 var(--dw-edge), transparent 100%);
-  -webkit-mask-composite: source-in;
-  mask-image:
-    radial-gradient(ellipse 78% 82% at 50% 46%, #000 var(--dw-edge), transparent 100%),
-    linear-gradient(to top, #000 var(--dw-edge), transparent 100%);
-  mask-composite: intersect;
+}
+
+.drift-wall::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 85% 85% at 50% 50%, transparent 45%, #000000 100%);
 }
 
 .drift-wall__plane {

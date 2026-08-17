@@ -235,10 +235,10 @@ export function letterScreen(nav) {
   let maxScroll = 1;
   let viewportHeight = window.innerHeight || 800;
   const anchorFrac = 0.4;
-  let currentProgress = 0;
+  let currentProgress = -1;
   let hintFaded = false;
   let running = false;
-  let rafId = null;
+  let scrollRafId = null;
   let hasTriggeredEnd = false;
   let nudgeTimer = null;
   let nudgeEl = null;
@@ -251,13 +251,19 @@ export function letterScreen(nav) {
     wordTops = allWords.map((span) => span.getBoundingClientRect().top - wrapRectTop);
     textHeight = textWrap.scrollHeight;
     textWrap.style.transform = prevTransform;
-    // More scroll room — 2x viewport height so the end doesn't trigger early
+    // Scroll room
     const spacerH = textHeight + viewportHeight * 2;
     spacer.style.height = spacerH + 'px';
     maxScroll = Math.max(1, spacerH - viewportHeight);
+    if (running && currentProgress >= 0) {
+      render(currentProgress, true);
+    }
   }
 
-  function render(progress) {
+  function render(progress, force = false) {
+    if (!force && Math.abs(progress - currentProgress) < 0.00002) return;
+    currentProgress = progress;
+
     progressBar.style.width = (progress * 100) + '%';
 
     const shouldFade = progress > 0.015;
@@ -296,9 +302,6 @@ export function letterScreen(nav) {
 
       const opacity = Math.max(REST_OPACITY, t);
       const span = allWords[i];
-      /* Always an explicit value. Assigning '' REMOVES the inline style and
-         drops the word back to the stylesheet, which is what once left the
-         whole letter invisible. */
       if (span._o !== opacity) {
         span.style.opacity = opacity.toFixed(2);
         span._o = opacity;
@@ -306,55 +309,33 @@ export function letterScreen(nav) {
     }
 
     // Outro trigger — only when truly at the end AND the last words are revealed
-    if (progress > 0.99 && !hasTriggeredEnd) {
-      // Guard: check that the last 10 words are actually visible
+    if (progress > 0.985 && !hasTriggeredEnd) {
       const lastWords = allWords.slice(-10);
       const allRevealed = lastWords.every(w => (w._o || 0) > 0.7);
       if (!allRevealed) return;
 
       hasTriggeredEnd = true;
-      // Stop the loop immediately to prevent any re-trigger
       running = false;
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = null;
-
-      /* Wait for her tap. Fullscreen and unmuted audio both need a real user
-         gesture — a timer here would hand the intro to the browser with no
-         gesture behind it, and it would play windowed and silent. Clicking
-         anywhere on this overlay proceeds, so it is never a dead end. */
+      if (scrollRafId) cancelAnimationFrame(scrollRafId);
+      scrollRafId = null;
       outroMsg.classList.add('letter-outro-active');
     }
   }
 
-  let lastFrameTs = 0;
-
-  function loop(ts) {
+  function updateScroll() {
+    scrollRafId = null;
     if (!running) return;
-    // #letter-root is position:fixed with overflow-y:auto — it IS the scroll container.
-    // Use cached maxScroll to prevent reading DOM layout properties every frame.
     const scrolled = Math.min(Math.max(el.scrollTop, 0), maxScroll);
     const targetProgress = maxScroll > 0 ? scrolled / maxScroll : 0;
-
-    /* Responsive easing: settles quickly and smoothly across both 60Hz and 120Hz screens. */
-    const dt = lastFrameTs ? Math.min(0.05, Math.max(0, (ts || 0) - lastFrameTs) / 1000) : 1 / 60;
-    lastFrameTs = ts || 0;
-    const ease = 1 - Math.exp(-dt / SCROLL_GLIDE);
-
-    currentProgress += (targetProgress - currentProgress) * ease;
-    if (Math.abs(targetProgress - currentProgress) < 0.00005) {
-      currentProgress = targetProgress;
-    }
-
-    render(currentProgress);
-    rafId = requestAnimationFrame(loop);
+    render(targetProgress);
   }
 
-  /* The rAF chain already runs continuously while the screen is alive. Calling
-     loop() from here as well started a NEW chain on every scroll event, so a
-     single flick left dozens of them running in parallel, each re-rendering
-     every word in the letter. That is what made scrolling feel like it stuck. */
   const onScroll = () => {
-    if (running) unlockAudio(); // no-op once it is already playing
+    if (!running) return;
+    unlockAudio();
+    if (!scrollRafId) {
+      scrollRafId = requestAnimationFrame(updateScroll);
+    }
   };
 
   const GESTURES = ['pointerdown', 'click', 'touchend', 'keydown'];
@@ -433,7 +414,6 @@ export function letterScreen(nav) {
         render(0);
         requestAnimationFrame(() => {
           measure();
-          loop();
         });
       });
 
@@ -451,7 +431,8 @@ export function letterScreen(nav) {
       soundPrompt?.remove();
       soundPrompt = null;
       stopLetterBgm();
-      if (rafId) cancelAnimationFrame(rafId);
+      if (scrollRafId) cancelAnimationFrame(scrollRafId);
+      scrollRafId = null;
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', measure);
       for (const ev of GESTURES) window.removeEventListener(ev, enableAudioOnGesture);
