@@ -12,10 +12,9 @@ import { LETTER_GALLERY_PLACEHOLDERS } from '../config.js';
 /* How a word looks before the scroll has reached it. Turn REST_OPACITY down
    for a starker reveal, up if it ever feels too dark. */
 const REST_OPACITY = 0.16;
-const REST_BLUR = 5; // px, faded out to 0 as the word arrives
-/* Seconds for the scroll to settle onto the real position. Larger is more
-   floaty, smaller is more immediate. */
-const SCROLL_GLIDE = 0.13;
+/* Seconds for the scroll to settle onto the real position. Responsive and snappy
+   so scrolling feels fluid and direct. */
+const SCROLL_GLIDE = 0.035;
 
 /* If she chooses to stay with the photos, how long before the first quiet
    nudge, and how long before it comes back after she waves it away. */
@@ -233,6 +232,8 @@ export function letterScreen(nav) {
   /* ---- Animation state ---- */
   let textHeight = 0;
   let wordTops = [];
+  let maxScroll = 1;
+  let viewportHeight = window.innerHeight || 800;
   const anchorFrac = 0.4;
   let currentProgress = 0;
   let hintFaded = false;
@@ -243,14 +244,17 @@ export function letterScreen(nav) {
   let nudgeEl = null;
 
   function measure() {
+    viewportHeight = window.innerHeight || 800;
     const prevTransform = textWrap.style.transform;
-    textWrap.style.transform = 'translateY(0px)';
+    textWrap.style.transform = 'none';
     const wrapRectTop = textWrap.getBoundingClientRect().top;
     wordTops = allWords.map((span) => span.getBoundingClientRect().top - wrapRectTop);
     textHeight = textWrap.scrollHeight;
     textWrap.style.transform = prevTransform;
     // More scroll room — 2x viewport height so the end doesn't trigger early
-    spacer.style.height = (textHeight + window.innerHeight * 2) + 'px';
+    const spacerH = textHeight + viewportHeight * 2;
+    spacer.style.height = spacerH + 'px';
+    maxScroll = Math.max(1, spacerH - viewportHeight);
   }
 
   function render(progress) {
@@ -262,9 +266,9 @@ export function letterScreen(nav) {
       hintFaded = shouldFade;
     }
 
-    const minTranslate = Math.min(0, window.innerHeight - textHeight);
+    const minTranslate = Math.min(0, viewportHeight - textHeight);
     const translateY = progress * minTranslate;
-    textWrap.style.transform = `translateY(${translateY.toFixed(2)}px)`;
+    textWrap.style.transform = `translate3d(0, ${translateY.toFixed(2)}px, 0)`;
 
     /* Nothing measured means nothing to drive, so hand the letter back to the
        stylesheet and let her read it plainly rather than show her a blank. */
@@ -274,7 +278,7 @@ export function letterScreen(nav) {
     }
     el.classList.add('ink');
 
-    const anchorY = window.innerHeight * anchorFrac;
+    const anchorY = viewportHeight * anchorFrac;
     const band = 160;
     const lead = 30;
 
@@ -291,7 +295,6 @@ export function letterScreen(nav) {
       }
 
       const opacity = Math.max(REST_OPACITY, t);
-      const blur = REST_BLUR * (1 - t);
       const span = allWords[i];
       /* Always an explicit value. Assigning '' REMOVES the inline style and
          drops the word back to the stylesheet, which is what once left the
@@ -299,12 +302,6 @@ export function letterScreen(nav) {
       if (span._o !== opacity) {
         span.style.opacity = opacity.toFixed(2);
         span._o = opacity;
-      }
-      /* 'none' rather than blur(0px): a zero-radius blur is still a filter the
-         compositor has to set up, and there are two thousand of these. */
-      if (span._b !== blur) {
-        span.style.filter = blur < 0.05 ? 'none' : `blur(${blur.toFixed(2)}px)`;
-        span._b = blur;
       }
     }
 
@@ -334,15 +331,11 @@ export function letterScreen(nav) {
   function loop(ts) {
     if (!running) return;
     // #letter-root is position:fixed with overflow-y:auto — it IS the scroll container.
-    // Only use el.scrollTop, never window.scrollY or getBoundingClientRect.
-    const total = spacer.offsetHeight - el.clientHeight;
-    const scrolled = Math.min(Math.max(el.scrollTop, 0), total);
-    const targetProgress = total > 0 ? scrolled / total : 0;
+    // Use cached maxScroll to prevent reading DOM layout properties every frame.
+    const scrolled = Math.min(Math.max(el.scrollTop, 0), maxScroll);
+    const targetProgress = maxScroll > 0 ? scrolled / maxScroll : 0;
 
-    /* Frame-rate independent easing. A flat 0.1 per frame chases twice as fast
-       on a 120Hz screen as on a 60Hz one, which is what makes the glide feel
-       different from machine to machine. This settles at the same rate on any
-       refresh rate. */
+    /* Responsive easing: settles quickly and smoothly across both 60Hz and 120Hz screens. */
     const dt = lastFrameTs ? Math.min(0.05, Math.max(0, (ts || 0) - lastFrameTs) / 1000) : 1 / 60;
     lastFrameTs = ts || 0;
     const ease = 1 - Math.exp(-dt / SCROLL_GLIDE);

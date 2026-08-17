@@ -38,8 +38,19 @@ const prefersReducedMotion = () => motionMedia()?.matches === true;
 const DEFAULT_RATIO = 3 / 2;
 const ratioCache = new Map();
 
-function measureRatio(url, timeout) {
+function measureRatio(url, timeout = 1500) {
   if (ratioCache.has(url)) return Promise.resolve(ratioCache.get(url));
+  // Fast path: extract dimensions directly from URL if encoded in path (e.g. /600/400 or /600x400)
+  const match = /(?:^|[^\d])(\d{2,4})[x/](\d{2,4})(?:[^\d]|$)/.exec(url);
+  if (match) {
+    const w = parseInt(match[1], 10);
+    const h = parseInt(match[2], 10);
+    if (w > 0 && h > 0) {
+      const ratio = w / h;
+      ratioCache.set(url, ratio);
+      return Promise.resolve(ratio);
+    }
+  }
   return new Promise((resolve) => {
     let settled = false;
     const finish = (ratio) => {
@@ -125,7 +136,7 @@ export function driftWall(photoUrls, options = {}) {
        1.9 every one of those was clamped to an identical height, which put
        the uniform-grid look straight back. */
     maxAspect = 2.3,
-    measureTimeout = 5000,
+    measureTimeout = 1500,
     className = '',
   } = options;
 
@@ -210,17 +221,9 @@ export function driftWall(photoUrls, options = {}) {
     tracks.length = 0;
     meta.length = 0;
 
-    /* Tiles sit on a rotated plane and are constantly moving into view, so
-       lazy loading shows blank gaps as they arrive. With a small wall just
-       load everything up front; only defer once there is a lot of it. */
+    /* Eager loading for transformed 3D plane tiles so images never stay blank */
     const columnHeight = (col) =>
       Math.max(unit, col.reduce((sum, item) => sum + item.height + gap, 0));
-
-    let total = 0;
-    columnItems.forEach((col) => {
-      total += col.length * Math.max(2, Math.ceil((viewportHeight * 1.6) / columnHeight(col)) + 1);
-    });
-    const loading = total > 90 ? 'lazy' : 'eager';
 
     columnItems.forEach((col, c) => {
       const copyHeight = columnHeight(col);
@@ -243,11 +246,14 @@ export function driftWall(photoUrls, options = {}) {
           const img = document.createElement('img');
           img.src = url;
           img.alt = '';
-          img.loading = loading;
+          img.loading = 'eager';
           img.decoding = 'async';
           img.draggable = false;
           // a dead link must not leave a broken-image icon on her letter
-          img.addEventListener('error', () => { tile.style.visibility = 'hidden'; });
+          img.addEventListener('error', () => {
+            img.style.display = 'none';
+            inner.classList.add('drift-wall__inner--failed');
+          });
           const overlay = document.createElement('span');
           overlay.className = 'drift-wall__overlay';
           inner.append(img, overlay);
